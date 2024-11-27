@@ -341,13 +341,14 @@ function EventList({ events, isLoading, onClear }: { events: EventLogEntry[]; is
                   {format(parseISO(event.time_generated), 'dd/MM/yyyy HH:mm:ss')}
                 </span>
               </div>
-              <div className="text-base-content/90 leading-relaxed" 
-                   dangerouslySetInnerHTML={{ 
-                     __html: event.message.replace(
-                       new RegExp(`(${event.matches.join('|')})`, 'gi'), 
-                       '<mark class="bg-yellow-500/30 text-yellow-200 px-1 rounded">$1</mark>'
-                     )
-                   }} 
+              <div 
+                className="text-base-content/90 leading-relaxed break-words whitespace-pre-wrap overflow-x-auto max-w-full" 
+                dangerouslySetInnerHTML={{ 
+                  __html: event.message.replace(
+                    new RegExp(`(${event.matches.join('|')})`, 'gi'), 
+                    '<mark class="bg-yellow-500/30 text-yellow-200 px-1 rounded">$1</mark>'
+                  )
+                }} 
               />
             </div>
           ))}
