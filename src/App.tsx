@@ -16,7 +16,6 @@ interface SearchParams {
   event_ids: number[];
   sources: string[];
   categories: number[];
-  min_severity: number | null;
   max_results: number | null;
 }
 
@@ -64,8 +63,7 @@ function SearchForm({ onSearch }: { onSearch: (params: SearchParams) => void }) 
     categories: [],
     start_date: null,
     end_date: null,
-    min_severity: null,
-    max_results: 1000
+    max_results: null
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -94,26 +92,31 @@ function SearchForm({ onSearch }: { onSearch: (params: SearchParams) => void }) 
               ...searchParams,
               keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
             })}
-            required
           />
 
           <div className="grid grid-cols-2 gap-4">
-            <input
-              type="datetime-local"
-              className="p-3 input input-bordered"
-              onChange={(e) => setSearchParams({
-                ...searchParams,
-                start_date: e.target.value ? new Date(e.target.value).toISOString() : null
-              })}
-            />
-            <input
-              type="datetime-local"
-              className="p-3 input input-bordered"
-              onChange={(e) => setSearchParams({
-                ...searchParams,
-                end_date: e.target.value ? new Date(e.target.value).toISOString() : null
-              })}
-            />
+            <div>
+              <label className="block text-sm mb-2">Start Date</label>
+              <input
+                type="datetime-local"
+                className="p-3 input input-bordered w-full"
+                onChange={(e) => setSearchParams({
+                  ...searchParams,
+                  start_date: e.target.value ? new Date(e.target.value).toISOString() : null
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-2">End Date</label>
+              <input
+                type="datetime-local"
+                className="p-3 input input-bordered w-full"
+                onChange={(e) => setSearchParams({
+                  ...searchParams,
+                  end_date: e.target.value ? new Date(e.target.value).toISOString() : null
+                })}
+              />
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -121,6 +124,7 @@ function SearchForm({ onSearch }: { onSearch: (params: SearchParams) => void }) 
               <button
                 key={type.id}
                 type="button"
+                aria-pressed={searchParams.event_types.includes(type.id)}
                 onClick={() => {
                   setSearchParams(prev => ({
                     ...prev,
@@ -203,36 +207,12 @@ function SearchForm({ onSearch }: { onSearch: (params: SearchParams) => void }) 
 
             <div>
               <label className="block text-sm mb-2">
-                Minimum Severity
-              </label>
-              <select
-                className="w-full p-3 input input-bordered"
-                onChange={(e) => {
-                  const value = parseInt(e.target.value);
-                  setSearchParams({
-                    ...searchParams,
-                    min_severity: value === 0 ? null : value
-                  });
-                }}
-                defaultValue="0"
-              >
-                <option value="0">Any Severity</option>
-                {EVENT_TYPES.map(type => (
-                  <option key={type.id} value={type.id}>
-                    {type.label} or higher
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm mb-2">
                 Maximum Results (0 or empty for unlimited)
               </label>
               <input
                 type="number"
                 className="w-full p-3 input input-bordered"
-                defaultValue={1000}
+                placeholder="Unlimited"
                 min={0}
                 onChange={handleMaxResultsChange}
               />

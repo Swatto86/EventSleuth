@@ -48,7 +48,6 @@ struct SearchParams {
     event_ids: Vec<u32>,
     sources: Vec<String>,
     categories: Vec<u16>,
-    min_severity: Option<u32>,
     exclude_keywords: Vec<String>,
     max_results: Option<usize>,
 }

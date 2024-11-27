@@ -1,8 +1,8 @@
 [package]
-name = "eventsleuth"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+name = "EventSleuth"
+version = "1.0.0"
+description = "Advanced Windows Event Log Analyzer"
+authors = ["Swatto"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
