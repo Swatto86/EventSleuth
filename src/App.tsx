@@ -387,36 +387,35 @@ function App() {
 
   return (
     <div className="min-h-screen bg-base-100 text-base-content">
-      {/* Fixed position theme selector */}
-      <div className="fixed top-4 right-4 z-50">
-        <div className="dropdown dropdown-end">
-          <button tabIndex={0} className="btn btn-ghost">
-            Theme
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-palette ml-2" viewBox="0 0 16 16">
-              <path d="M8 5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m4 3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M5.5 7a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m.5 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>
-              <path d="M16 8c0 3.15-1.866 2.585-3.567 2.07C11.42 9.763 10.465 9.473 10 10c-.603.683-.475 1.819-.351 2.92C9.826 14.495 9.996 16 8 16a8 8 0 1 1 8-8m-8 7c1.573 0 1.445-1.063 1.322-2.27-.107-1.042-.23-2.23.352-2.91.583-.68 1.538-.391 2.543-.085 1.701.515 3.783 1.08 3.783-1.735a7 7 0 1 0-7 7"/>
-            </svg>
-          </button>
-          <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-200 rounded-box w-52">
-            {THEMES.map((t) => (
-              <li key={t}>
-                <button 
-                  onClick={() => setTheme(t)}
-                  className={`${theme === t ? 'active' : ''}`}
-                >
-                  {t}
-                </button>
-              </li>
-            ))}
-          </ul>
+      <div className="sticky top-0 z-50 bg-base-100">
+        <div className="container mx-auto px-4 py-4 flex justify-center items-center relative">
+          <h1 className="text-3xl font-bold absolute left-1/2 transform -translate-x-1/2">EventSleuth</h1>
+          <div className="dropdown dropdown-end ml-auto">
+            <button tabIndex={0} className="btn btn-ghost">
+              Theme
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-palette ml-2" viewBox="0 0 16 16">
+                <path d="M8 5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m4 3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M5.5 7a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m.5 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>
+                <path d="M16 8c0 3.15-1.866 2.585-3.567 2.07C11.42 9.763 10.465 9.473 10 10c-.603.683-.475 1.819-.351 2.92C9.826 14.495 9.996 16 8 16a8 8 0 1 1 8-8m-8 7c1.573 0 1.445-1.063 1.322-2.27-.107-1.042-.23-2.23.352-2.91.583-.68 1.538-.391 2.543-.085 1.701.515 3.783 1.08 3.783-1.735a7 7 0 1 0-7 7"/>
+              </svg>
+            </button>
+            <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-200 rounded-box w-52">
+              {THEMES.map((t) => (
+                <li key={t}>
+                  <button 
+                    onClick={() => setTheme(t)}
+                    className={`${theme === t ? 'active' : ''}`}
+                  >
+                    {t}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
 
       {/* Main content */}
       <div className="container mx-auto px-4 py-6">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold">EventSleuth</h1>
-        </div>
         <SearchForm onSearch={handleSearch} />
         <div className="mt-6">
           <EventList 
