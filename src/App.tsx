@@ -342,11 +342,26 @@ function App() {
   const [events, setEvents] = useState<EventLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);  // Changed default to false
 
   // Theme management
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Check admin status on app launch
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      try {
+        const isAdmin = await invoke<boolean>('check_admin_rights');
+        setIsAdmin(isAdmin);
+      } catch (error) {
+        console.error('Failed to check admin status:', error);
+        setIsAdmin(false);
+      }
+    };
+    checkAdminStatus();
+  }, []);
 
   const handleSearch = async (params: SearchParams) => {
     setIsLoading(true);
@@ -368,6 +383,12 @@ function App() {
   return (
     <div className="min-h-screen bg-base-100 text-base-content">
       <div className="sticky top-0 z-50 bg-base-100">
+        {!isAdmin && (
+          <div className="bg-base-100 text-error p-2 text-center text-sm">
+            ⚠️ Running without administrator privileges. Some event logs may not be accessible. 
+            Please run as administrator for full access.
+          </div>
+        )}
         <div className="container mx-auto px-4 py-4 flex justify-center items-center relative">
           <h1 className="text-3xl font-bold absolute left-1/2 transform -translate-x-1/2">EventSleuth</h1>
           <div className="dropdown dropdown-end ml-auto">

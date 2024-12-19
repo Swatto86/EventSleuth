@@ -19,6 +19,7 @@ use tauri::{
 };
 use std::sync::Once;
 use tauri::tray::TrayIconBuilder;
+use is_elevated;
 
 static TRAY_INIT: Once = Once::new();
 
@@ -73,6 +74,11 @@ fn convert_severity(event_type: u32) -> String {
         5 => "Verbose".to_string(),
         _ => format!("Unknown ({})", event_type),
     }
+}
+
+#[tauri::command]
+fn check_admin_rights() -> bool {
+    is_elevated::is_elevated()
 }
 
 #[tauri::command]
@@ -465,7 +471,7 @@ fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 TrayIconEvent::Click {
                     button: MouseButton::Left,
                     button_state: MouseButtonState::Up,
-                    ..
+                    .. 
                 } => {
                     let app_handle = tray_handle.app_handle().clone();
                     if let Some(window) = app_handle.get_webview_window("main") {
@@ -535,7 +541,11 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![search_event_logs, get_available_logs])
+        .invoke_handler(tauri::generate_handler![
+            search_event_logs, 
+            get_available_logs,
+            check_admin_rights  // Add this to the invoke handler
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
