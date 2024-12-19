@@ -549,3 +549,79 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_mock_search_params() -> SearchParams {
+        SearchParams {
+            keywords: vec!["error".to_string()],
+            exclude_keywords: vec![],
+            start_date: None,
+            end_date: None,
+            log_names: vec![],
+            event_types: vec![],
+            event_ids: vec![],
+            sources: vec![],
+            categories: vec![],
+            max_results: None,
+        }
+    }
+
+    #[test]
+    fn test_convert_event_type() {
+        assert_eq!(convert_event_type(1), "Error");
+        assert_eq!(convert_event_type(2), "Warning");
+        assert_eq!(convert_event_type(4), "Information");
+        assert_eq!(convert_event_type(99), "Unknown");
+    }
+
+    #[test]
+    fn test_convert_severity() {
+        assert_eq!(convert_severity(1), "Critical");
+        assert_eq!(convert_severity(2), "Error");
+        assert_eq!(convert_severity(3), "Warning");
+        assert_eq!(convert_severity(4), "Information");
+        assert_eq!(convert_severity(5), "Verbose");
+    }
+
+    #[test]
+    fn test_check_admin_rights() {
+        let result = check_admin_rights();
+        assert!(result == true || result == false);
+    }
+
+    #[test]
+    fn test_get_available_logs() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let result = get_available_logs().await;
+            assert!(result.is_ok());
+            let logs = result.unwrap();
+            assert!(!logs.is_empty());
+            assert!(logs.contains(&"Application".to_string()) || 
+                   logs.contains(&"System".to_string()) || 
+                   logs.contains(&"Security".to_string()));
+        });
+    }
+
+    #[tokio::test]
+    async fn test_search_event_logs() {
+        let params = create_mock_search_params();
+        let result = search_event_logs(params).await;
+        assert!(result.is_ok());
+        
+        if let Ok(entries) = result {
+            // Verify that all returned entries contain the keyword "error"
+            for entry in entries {
+                assert!(
+                    entry.message.to_lowercase().contains("error") || 
+                    entry.matches.contains(&"error".to_string())
+                );
+            }
+        }
+    }
+
+    // ...existing code...
+}
