@@ -17,7 +17,7 @@ npm install
 
 Write-Host ""
 Write-Host "Installing additional test dependencies..." -ForegroundColor Yellow
-npm install -D @testing-library/user-event@^14.5.1 @vitest/coverage-v8@^1.0.0 jsdom@^23.0.0
+npm install -D @testing-library/user-event@^14.5.1 @vitest/coverage-v8@^4.0.15 jsdom@^23.0.0
 
 Write-Host ""
 Write-Host "Verifying Rust toolchain..." -ForegroundColor Yellow
