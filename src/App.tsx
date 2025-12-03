@@ -17,6 +17,7 @@ interface SearchParams {
   sources: string[];
   categories: number[];
   max_results: number | null;
+  exact_match: boolean;
 }
 
 interface EventLogEntry {
@@ -93,6 +94,7 @@ export function SearchForm({
     start_date: null,
     end_date: null,
     max_results: null,
+    exact_match: false,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -156,6 +158,27 @@ export function SearchForm({
             <p className="text-xs text-base-content/60 mt-1">
               Search for specific terms in event messages
             </p>
+            {/* Exact Match Checkbox */}
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="checkbox"
+                id="exact-match"
+                className="checkbox checkbox-primary checkbox-sm"
+                checked={searchParams.exact_match}
+                onChange={(e) =>
+                  setSearchParams({
+                    ...searchParams,
+                    exact_match: e.target.checked,
+                  })
+                }
+              />
+              <label
+                htmlFor="exact-match"
+                className="text-sm text-base-content/80 cursor-pointer"
+              >
+                Exact word match only
+              </label>
+            </div>
           </div>
 
           {/* Date Range */}

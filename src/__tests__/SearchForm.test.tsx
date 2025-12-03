@@ -145,6 +145,33 @@ describe("SearchForm Component", () => {
         }),
       );
     });
+
+    it("should handle exact match checkbox", async () => {
+      const user = userEvent.setup();
+      render(<SearchForm onSearch={mockOnSearch} />);
+
+      const exactMatchCheckbox = screen.getByLabelText(
+        /exact word match only/i,
+      ) as HTMLInputElement;
+
+      // Initially unchecked
+      expect(exactMatchCheckbox.checked).toBe(false);
+
+      // Check the checkbox
+      await user.click(exactMatchCheckbox);
+      expect(exactMatchCheckbox.checked).toBe(true);
+
+      const searchButton = screen.getByRole("button", {
+        name: /search events/i,
+      });
+      await user.click(searchButton);
+
+      expect(mockOnSearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exact_match: true,
+        }),
+      );
+    });
   });
 
   describe("Date Range Selection", () => {
@@ -606,6 +633,7 @@ describe("SearchForm Component", () => {
         sources: ["Application"],
         categories: [],
         max_results: 50,
+        exact_match: false,
       });
     });
   });

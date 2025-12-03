@@ -49,6 +49,7 @@ struct SearchParams {
     categories: Vec<u16>,
     exclude_keywords: Vec<String>,
     max_results: Option<usize>,
+    exact_match: bool,
 }
 
 fn convert_event_type(event_type: u32) -> String {
@@ -88,13 +89,29 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
     let keywords: Vec<Regex> = params
         .keywords
         .iter()
-        .map(|k| Regex::new(&regex::escape(k)).unwrap())
+        .map(|k| {
+            let escaped = regex::escape(k);
+            let pattern = if params.exact_match {
+                format!(r"\b{}\b", escaped)
+            } else {
+                escaped
+            };
+            Regex::new(&pattern).unwrap()
+        })
         .collect();
 
     let exclude_patterns: Vec<Regex> = params
         .exclude_keywords
         .iter()
-        .map(|k| Regex::new(&regex::escape(k)).unwrap())
+        .map(|k| {
+            let escaped = regex::escape(k);
+            let pattern = if params.exact_match {
+                format!(r"\b{}\b", escaped)
+            } else {
+                escaped
+            };
+            Regex::new(&pattern).unwrap()
+        })
         .collect();
 
     // Convert date strings to timestamps if provided
@@ -624,6 +641,7 @@ mod tests {
             sources: vec![],
             categories: vec![],
             max_results: None,
+            exact_match: false,
         }
     }
 
