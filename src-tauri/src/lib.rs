@@ -524,6 +524,7 @@ fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .icon(app.default_window_icon().unwrap().clone())
             .menu(&menu)
             .menu_on_left_click(false)
+            .tooltip("EventSleuth - Search Windows Event Log")
             .on_tray_icon_event(|tray_handle, event| match event {
                 TrayIconEvent::Click {
                     button: MouseButton::Left,
