@@ -109,10 +109,10 @@ export function SearchForm({
   };
 
   return (
-    <div className="bg-base-200 p-8 rounded-xl shadow-2xl border border-base-300">
-      <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="bg-base-200 p-4 rounded-xl shadow-2xl border border-base-300">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {/* Search Header */}
-        <div className="flex items-center gap-3 pb-4 border-b border-base-300">
+        <div className="flex items-center gap-3 pb-2 border-b border-base-300">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             className="h-6 w-6 text-primary"
@@ -133,7 +133,7 @@ export function SearchForm({
         </div>
 
         {/* Basic Search */}
-        <div className="space-y-5">
+        <div className="space-y-3">
           {/* Keywords Input */}
           <div>
             <label className="block text-sm font-medium mb-2 text-base-content/90">
@@ -271,7 +271,7 @@ export function SearchForm({
 
         {/* Advanced Search Options */}
         {showAdvanced && (
-          <div className="space-y-5 p-6 bg-base-300/50 rounded-xl border border-base-300 backdrop-blur-sm">
+          <div className="space-y-3 p-4 bg-base-300/50 rounded-xl border border-base-300 backdrop-blur-sm">
             <div className="flex items-center gap-2 pb-3 border-b border-base-300">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -723,7 +723,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-base-100 to-base-200 text-base-content">
+    <div className="h-screen overflow-auto bg-gradient-to-br from-base-100 to-base-200 text-base-content">
       <div className="sticky top-0 z-50 bg-base-100/95 backdrop-blur-md shadow-lg border-b border-base-300">
         {!isAdmin && (
           <div className="bg-error/10 text-error p-3 text-center text-sm border-b border-error/20 flex items-center justify-center gap-2">
@@ -749,7 +749,7 @@ function App() {
             </span>
           </div>
         )}
-        <div className="container mx-auto px-4 py-5 flex items-center justify-center relative">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-center relative">
           <div className="flex items-center gap-3">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -773,9 +773,9 @@ function App() {
       </div>
 
       {/* Main content */}
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="container mx-auto px-4 py-4 max-w-7xl">
         <SearchForm onSearch={handleSearch} />
-        <div className="mt-8">
+        <div className="mt-4">
           <EventList
             events={events}
             isLoading={isLoading}

@@ -1,25 +1,23 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use serde::{Deserialize, Serialize};
-use windows::Win32::System::EventLog::{
-    OpenEventLogW, ReadEventLogW, CloseEventLog,
-    EVENTLOG_SEQUENTIAL_READ, READ_EVENT_LOG_READ_FLAGS,
-    EVENTLOGRECORD,
-};
-use windows::Win32::System::Registry::*;
-use windows::core::{PCWSTR, PWSTR};
+use is_elevated;
 use regex::Regex;
-use windows::Win32::Foundation::*;
-use tauri_plugin_dialog;
-use tauri_plugin_fs;
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::{TrayIconEvent, MouseButton, MouseButtonState},
-    WindowEvent,
-    Manager,
-};
+use serde::{Deserialize, Serialize};
 use std::sync::Once;
 use tauri::tray::TrayIconBuilder;
-use is_elevated;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconEvent},
+    Manager, WindowEvent,
+};
+use tauri_plugin_dialog;
+use tauri_plugin_fs;
+use windows::core::{PCWSTR, PWSTR};
+use windows::Win32::Foundation::*;
+use windows::Win32::System::EventLog::{
+    CloseEventLog, OpenEventLogW, ReadEventLogW, EVENTLOGRECORD, EVENTLOG_SEQUENTIAL_READ,
+    READ_EVENT_LOG_READ_FLAGS,
+};
+use windows::Win32::System::Registry::*;
 
 static TRAY_INIT: Once = Once::new();
 
@@ -55,10 +53,10 @@ struct SearchParams {
 
 fn convert_event_type(event_type: u32) -> String {
     match event_type {
-        1 => "Error".to_string(),        // EVENTLOG_ERROR_TYPE
-        2 => "Warning".to_string(),      // EVENTLOG_WARNING_TYPE
-        4 => "Information".to_string(),  // EVENTLOG_INFORMATION_TYPE
-        8 => "Audit Success".to_string(), // EVENTLOG_AUDIT_SUCCESS
+        1 => "Error".to_string(),          // EVENTLOG_ERROR_TYPE
+        2 => "Warning".to_string(),        // EVENTLOG_WARNING_TYPE
+        4 => "Information".to_string(),    // EVENTLOG_INFORMATION_TYPE
+        8 => "Audit Success".to_string(),  // EVENTLOG_AUDIT_SUCCESS
         16 => "Audit Failure".to_string(), // EVENTLOG_AUDIT_FAILURE
         _ => "Unknown".to_string(),
     }
@@ -85,14 +83,14 @@ fn check_admin_rights() -> bool {
 async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, String> {
     println!("Starting search with params: {:?}", params);
     let mut results = Vec::new();
-    
+
     // Compile regex patterns for both include and exclude keywords
     let keywords: Vec<Regex> = params
         .keywords
         .iter()
         .map(|k| Regex::new(&regex::escape(k)).unwrap())
         .collect();
-    
+
     let exclude_patterns: Vec<Regex> = params
         .exclude_keywords
         .iter()
@@ -100,12 +98,14 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
         .collect();
 
     // Convert date strings to timestamps if provided
-    let start_timestamp = params.start_date
+    let start_timestamp = params
+        .start_date
         .as_ref()
         .and_then(|date_str| chrono::DateTime::parse_from_rfc3339(date_str).ok())
         .map(|dt| dt.timestamp());
-    
-    let end_timestamp = params.end_date
+
+    let end_timestamp = params
+        .end_date
         .as_ref()
         .and_then(|date_str| chrono::DateTime::parse_from_rfc3339(date_str).ok())
         .map(|dt| dt.timestamp());
@@ -114,7 +114,11 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
     let logs_to_search = if params.log_names.is_empty() {
         match get_available_logs().await {
             Ok(logs) => logs,
-            Err(_) => vec!["Application".to_string(), "System".to_string(), "Security".to_string()] // Fallback to default logs
+            Err(_) => vec![
+                "Application".to_string(),
+                "System".to_string(),
+                "Security".to_string(),
+            ], // Fallback to default logs
         }
     } else {
         params.log_names.clone()
@@ -130,7 +134,10 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
     for log_name in &logs_to_search {
         // Change the limit check to respect unlimited results
         if should_limit && results.len() >= params.max_results.unwrap() {
-            println!("Reached maximum results limit of {}", params.max_results.unwrap());
+            println!(
+                "Reached maximum results limit of {}",
+                params.max_results.unwrap()
+            );
             break;
         }
 
@@ -139,7 +146,11 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
             let handle = OpenEventLogW(
                 PCWSTR::null(),
                 PCWSTR::from_raw(
-                    log_name.encode_utf16().chain(Some(0)).collect::<Vec<u16>>().as_ptr(),
+                    log_name
+                        .encode_utf16()
+                        .chain(Some(0))
+                        .collect::<Vec<u16>>()
+                        .as_ptr(),
                 ),
             );
 
@@ -157,7 +168,7 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                     }
 
                     let flags = READ_EVENT_LOG_READ_FLAGS(
-                        EVENTLOG_SEQUENTIAL_READ.0 | EVENTLOG_FORWARDS_READ
+                        EVENTLOG_SEQUENTIAL_READ.0 | EVENTLOG_FORWARDS_READ,
                     );
 
                     let result = ReadEventLogW(
@@ -178,7 +189,8 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
 
                             let mut offset = 0;
                             while offset < read_bytes as usize {
-                                let record = (record_buffer.as_ptr().add(offset)) as *const EVENTLOGRECORD;
+                                let record =
+                                    (record_buffer.as_ptr().add(offset)) as *const EVENTLOGRECORD;
                                 if offset + (*record).Length as usize > read_bytes as usize {
                                     break;
                                 }
@@ -203,34 +215,61 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                                     }
                                 }
 
-                                // Event type filter
-                                if !params.event_types.is_empty() && !params.event_types.contains(&event_type) {
-                                    should_include = false;
+                                // Event type filter - map frontend severity levels to Windows event types
+                                // Frontend sends: 1=Critical, 2=Error, 3=Warning, 4=Information, 5=Verbose
+                                // Windows uses: 1=Error, 2=Warning, 4=Information, 8=Audit Success, 16=Audit Failure
+                                if !params.event_types.is_empty() {
+                                    let matches_severity =
+                                        params.event_types.iter().any(|&severity_level| {
+                                            match severity_level {
+                                                1 => event_type == 1, // Critical maps to Error type
+                                                2 => event_type == 1, // Error maps to Error type
+                                                3 => event_type == 2, // Warning maps to Warning type
+                                                4 => event_type == 4, // Information maps to Information type
+                                                5 => event_type == 4, // Verbose maps to Information type
+                                                _ => false,
+                                            }
+                                        });
+                                    if !matches_severity {
+                                        should_include = false;
+                                    }
                                 }
 
                                 // Event ID filter
-                                if !params.event_ids.is_empty() && !params.event_ids.contains(&event_id) {
+                                if !params.event_ids.is_empty()
+                                    && !params.event_ids.contains(&event_id)
+                                {
                                     should_include = false;
                                 }
 
                                 // Category filter
-                                if !params.categories.is_empty() && !params.categories.contains(&category) {
+                                if !params.categories.is_empty()
+                                    && !params.categories.contains(&category)
+                                {
                                     should_include = false;
                                 }
 
                                 // Source filter
                                 if !params.sources.is_empty() {
                                     let source_name = {
-                                        let string_offset = offset + (*record).StringOffset as usize;
-                                        let string_ptr = record_buffer[string_offset..].as_ptr() as *const u16;
+                                        let string_offset =
+                                            offset + (*record).StringOffset as usize;
+                                        let string_ptr =
+                                            record_buffer[string_offset..].as_ptr() as *const u16;
                                         let mut string_len = 0;
                                         while *string_ptr.add(string_len) != 0 {
                                             string_len += 1;
                                         }
-                                        String::from_utf16(std::slice::from_raw_parts(string_ptr, string_len))
-                                            .unwrap_or_default()
+                                        String::from_utf16(std::slice::from_raw_parts(
+                                            string_ptr, string_len,
+                                        ))
+                                        .unwrap_or_default()
                                     };
-                                    if !params.sources.iter().any(|s| s.eq_ignore_ascii_case(&source_name)) {
+                                    if !params
+                                        .sources
+                                        .iter()
+                                        .any(|s| s.eq_ignore_ascii_case(&source_name))
+                                    {
                                         should_include = false;
                                     }
                                 }
@@ -238,7 +277,8 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                                 // Extract message only if other filters pass
                                 if should_include {
                                     let message = {
-                                        let strings_offset = offset + (*record).StringOffset as usize;
+                                        let strings_offset =
+                                            offset + (*record).StringOffset as usize;
                                         let strings_count = (*record).NumStrings;
                                         let mut string_parts = Vec::new();
                                         let mut current_offset = strings_offset;
@@ -248,10 +288,14 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                                                 break;
                                             }
 
-                                            let string_ptr = record_buffer[current_offset..].as_ptr() as *const u16;
+                                            let string_ptr = record_buffer[current_offset..]
+                                                .as_ptr()
+                                                as *const u16;
                                             let mut string_len = 0;
-                                            
-                                            while string_len < ((record_buffer.len() - current_offset) / 2) {
+
+                                            while string_len
+                                                < ((record_buffer.len() - current_offset) / 2)
+                                            {
                                                 if *string_ptr.add(string_len) == 0 {
                                                     break;
                                                 }
@@ -259,9 +303,11 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                                             }
 
                                             if string_len > 0 {
-                                                if let Ok(part) = String::from_utf16(
-                                                    std::slice::from_raw_parts(string_ptr, string_len)
-                                                ) {
+                                                if let Ok(part) =
+                                                    String::from_utf16(std::slice::from_raw_parts(
+                                                        string_ptr, string_len,
+                                                    ))
+                                                {
                                                     string_parts.push(part);
                                                 }
                                             }
@@ -284,16 +330,19 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                                     };
 
                                     // Keyword and exclude filters
-                                    if exclude_patterns.iter().any(|pattern| pattern.is_match(&message.to_lowercase())) {
+                                    if exclude_patterns
+                                        .iter()
+                                        .any(|pattern| pattern.is_match(&message.to_lowercase()))
+                                    {
                                         should_include = false;
                                     }
 
                                     let mut matches = Vec::new();
                                     if !keywords.is_empty() {
                                         let message_lower = message.to_lowercase();
-                                        for keyword in &keywords {
+                                        for (idx, keyword) in keywords.iter().enumerate() {
                                             if keyword.is_match(&message_lower) {
-                                                matches.push(params.keywords[matches.len()].clone());
+                                                matches.push(params.keywords[idx].clone());
                                             }
                                         }
                                         if matches.is_empty() {
@@ -328,7 +377,7 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
 
                                 offset += (*record).Length as usize;
                             }
-                        },
+                        }
                         Err(error) => {
                             if error.code().0 as u32 == ERROR_INSUFFICIENT_BUFFER.0 {
                                 buffer_size = needed_bytes as usize;
@@ -361,14 +410,16 @@ async fn get_available_logs() -> Result<Vec<String>, String> {
         let mut key_handle = HKEY::default();
         let path = "SYSTEM\\CurrentControlSet\\Services\\EventLog\0";
         let path_wide: Vec<u16> = path.encode_utf16().collect();
-        
+
         if RegOpenKeyExW(
             HKEY_LOCAL_MACHINE,
             PCWSTR::from_raw(path_wide.as_ptr()),
             0,
             KEY_READ,
             &mut key_handle,
-        ).is_ok() {
+        )
+        .is_ok()
+        {
             let mut index = 0;
             let mut name_buffer = vec![0u16; 256];
             let mut name_size = name_buffer.len() as u32;
@@ -382,15 +433,15 @@ async fn get_available_logs() -> Result<Vec<String>, String> {
                 PWSTR::null(),
                 Some(std::ptr::null_mut()),
                 Some(std::ptr::null_mut()),
-            ).is_ok() {
+            )
+            .is_ok()
+            {
                 if let Ok(log_name) = String::from_utf16(&name_buffer[..name_size as usize]) {
                     // Try to open the log to verify it's accessible
                     let log_name_wide: Vec<u16> = log_name.encode_utf16().chain(Some(0)).collect();
-                    let handle = OpenEventLogW(
-                        PCWSTR::null(),
-                        PCWSTR::from_raw(log_name_wide.as_ptr()),
-                    );
-                    
+                    let handle =
+                        OpenEventLogW(PCWSTR::null(), PCWSTR::from_raw(log_name_wide.as_ptr()));
+
                     if let Ok(handle) = handle {
                         logs.push(log_name.clone());
                         let _ = CloseEventLog(handle);
@@ -400,14 +451,16 @@ async fn get_available_logs() -> Result<Vec<String>, String> {
                     let mut subkey_handle = HKEY::default();
                     let subkey_path = format!("{}\\{}", path.trim_end_matches('\0'), log_name);
                     let subkey_path_wide: Vec<u16> = subkey_path.encode_utf16().collect();
-                    
+
                     if RegOpenKeyExW(
                         HKEY_LOCAL_MACHINE,
                         PCWSTR::from_raw(subkey_path_wide.as_ptr()),
                         0,
                         KEY_READ,
                         &mut subkey_handle,
-                    ).is_ok() {
+                    )
+                    .is_ok()
+                    {
                         let mut sub_index = 0;
                         let mut sub_name_size = name_buffer.len() as u32;
 
@@ -420,15 +473,20 @@ async fn get_available_logs() -> Result<Vec<String>, String> {
                             PWSTR::null(),
                             Some(std::ptr::null_mut()),
                             Some(std::ptr::null_mut()),
-                        ).is_ok() {
-                            if let Ok(sub_log_name) = String::from_utf16(&name_buffer[..sub_name_size as usize]) {
+                        )
+                        .is_ok()
+                        {
+                            if let Ok(sub_log_name) =
+                                String::from_utf16(&name_buffer[..sub_name_size as usize])
+                            {
                                 let full_log_name = format!("{}/{}", log_name, sub_log_name);
-                                let full_name_wide: Vec<u16> = full_log_name.encode_utf16().chain(Some(0)).collect();
+                                let full_name_wide: Vec<u16> =
+                                    full_log_name.encode_utf16().chain(Some(0)).collect();
                                 let sub_handle = OpenEventLogW(
                                     PCWSTR::null(),
                                     PCWSTR::from_raw(full_name_wide.as_ptr()),
                                 );
-                                
+
                                 if let Ok(sub_handle) = sub_handle {
                                     logs.push(full_log_name);
                                     let _ = CloseEventLog(sub_handle);
@@ -460,8 +518,7 @@ fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .expect("Failed to create quit menu item");
 
         // Create the menu
-        let menu = Menu::with_items(app, &[&quit_item])
-            .expect("Failed to create menu");
+        let menu = Menu::with_items(app, &[&quit_item]).expect("Failed to create menu");
 
         let _tray = TrayIconBuilder::new()
             .icon(app.default_window_icon().unwrap().clone())
@@ -471,7 +528,7 @@ fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 TrayIconEvent::Click {
                     button: MouseButton::Left,
                     button_state: MouseButtonState::Up,
-                    .. 
+                    ..
                 } => {
                     let app_handle = tray_handle.app_handle().clone();
                     if let Some(window) = app_handle.get_webview_window("main") {
@@ -488,7 +545,7 @@ fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                         });
                     }
                 }
-                _ => ()
+                _ => (),
             })
             .on_menu_event(|app, event| match event.id() {
                 id if id == "quit" => {
@@ -499,7 +556,7 @@ fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .build(app)
             .expect("Failed to build tray icon");
     });
-    
+
     Ok(())
 }
 
@@ -515,11 +572,11 @@ pub fn run() {
 
             // Get main window handle
             let main_window = app.get_webview_window("main").unwrap();
-            
+
             // Create separate clones for different uses
             let window_for_centering = main_window.clone();
             let window_for_events = main_window.clone();
-            
+
             // Add programmatic window positioning and showing
             tauri::async_runtime::spawn(async move {
                 std::thread::sleep(std::time::Duration::from_millis(100));
@@ -527,7 +584,7 @@ pub fn run() {
                 window_for_centering.show().unwrap();
                 window_for_centering.set_focus().unwrap();
             });
-            
+
             main_window.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     let _ = window_for_events.hide();
@@ -542,9 +599,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
-            search_event_logs, 
+            search_event_logs,
             get_available_logs,
-            check_admin_rights  // Add this to the invoke handler
+            check_admin_rights // Add this to the invoke handler
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -600,9 +657,11 @@ mod tests {
             assert!(result.is_ok());
             let logs = result.unwrap();
             assert!(!logs.is_empty());
-            assert!(logs.contains(&"Application".to_string()) || 
-                   logs.contains(&"System".to_string()) || 
-                   logs.contains(&"Security".to_string()));
+            assert!(
+                logs.contains(&"Application".to_string())
+                    || logs.contains(&"System".to_string())
+                    || logs.contains(&"Security".to_string())
+            );
         });
     }
 
@@ -611,13 +670,13 @@ mod tests {
         let params = create_mock_search_params();
         let result = search_event_logs(params).await;
         assert!(result.is_ok());
-        
+
         if let Ok(entries) = result {
             // Verify that all returned entries contain the keyword "error"
             for entry in entries {
                 assert!(
-                    entry.message.to_lowercase().contains("error") || 
-                    entry.matches.contains(&"error".to_string())
+                    entry.message.to_lowercase().contains("error")
+                        || entry.matches.contains(&"error".to_string())
                 );
             }
         }
