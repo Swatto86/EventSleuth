@@ -31,6 +31,7 @@ struct EventLogEntry {
     source: String,
     time_generated: String,
     event_id: u32,
+    event_id_qualifiers: u32,
     event_type: String,
     severity: String,
     category: u16,
@@ -220,7 +221,11 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
 
                                 let time_generated = (*record).TimeGenerated as i64;
                                 let event_type = (*record).EventType.0 as u32;
-                                let event_id = (*record).EventID;
+                                let raw_event_id = (*record).EventID;
+                                // Extract the actual Event ID (lower 16 bits) that users see in Event Viewer
+                                let event_id = raw_event_id & 0xFFFF;
+                                // Extract qualifiers (upper 16 bits)
+                                let event_id_qualifiers = (raw_event_id >> 16) & 0xFFFF;
                                 let category = (*record).EventCategory;
 
                                 // Apply filters
@@ -388,6 +393,7 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                                             .with_timezone(&chrono::Local)
                                             .to_rfc3339(),
                                             event_id,
+                                            event_id_qualifiers,
                                             event_type: convert_event_type(event_type),
                                             severity: convert_severity(event_type),
                                             category,
@@ -430,17 +436,28 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
 }
 
 #[tauri::command]
-async fn open_event_in_viewer(log_name: String, event_id: u32) -> Result<(), String> {
+async fn open_event_in_viewer(
+    log_name: String,
+    event_id: u32,
+    record_number: u32,
+) -> Result<(), String> {
+    println!(
+        "Opening Event Viewer for log: {}, event ID: {}, record: {}",
+        log_name, event_id, record_number
+    );
+
     unsafe {
-        // Build the Event Viewer command with filter to jump to specific event
-        // Format: eventvwr.msc /c:LogName /f:"*[System[(EventID=1234)]]"
-        let filter = format!(
-            r#"eventvwr.msc /c:{} /f:"*[System[(EventID={})]]""#,
-            log_name, event_id
+        // Use cmd.exe to launch eventvwr.msc with the filter
+        // Format: cmd.exe /c eventvwr.msc /c:LogName /f:"*[System[(EventID=1234 and EventRecordID=5678)]]"
+        let command = format!(
+            r#"cmd.exe /c eventvwr.msc /c:{} /f:"*[System[(EventID={} and EventRecordID={})]]""#,
+            log_name, event_id, record_number
         );
 
+        println!("Command: {}", command);
+
         // Convert to wide string (UTF-16)
-        let mut cmd_line: Vec<u16> = filter.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut cmd_line: Vec<u16> = command.encode_utf16().chain(std::iter::once(0)).collect();
 
         let si = STARTUPINFOW {
             cb: std::mem::size_of::<STARTUPINFOW>() as u32,
@@ -466,6 +483,7 @@ async fn open_event_in_viewer(log_name: String, event_id: u32) -> Result<(), Str
 
         match result {
             Ok(_) => {
+                println!("Event Viewer launched successfully");
                 // Close handles as we don't need to wait for the process
                 if pi.hProcess.0 != 0 {
                     let _ = windows::Win32::Foundation::CloseHandle(pi.hProcess);
@@ -475,7 +493,11 @@ async fn open_event_in_viewer(log_name: String, event_id: u32) -> Result<(), Str
                 }
                 Ok(())
             }
-            Err(e) => Err(format!("Failed to open Event Viewer: {}", e)),
+            Err(e) => {
+                let error_msg = format!("Failed to open Event Viewer: {}", e);
+                println!("{}", error_msg);
+                Err(error_msg)
+            }
         }
     }
 }

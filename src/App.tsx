@@ -25,6 +25,7 @@ interface EventLogEntry {
   source: string;
   time_generated: string;
   event_id: number;
+  event_id_qualifiers: number;
   event_type: string;
   severity: string;
   category: number;
@@ -458,9 +459,17 @@ export function EventList({
   const safeEvents = events || [];
   const eventCount = safeEvents.length;
 
-  const handleOpenInViewer = async (logName: string, eventId: number) => {
+  const handleOpenInViewer = async (
+    logName: string,
+    eventId: number,
+    recordNumber: number,
+  ) => {
     try {
-      await invoke("open_event_in_viewer", { logName, eventId });
+      await invoke("open_event_in_viewer", {
+        logName,
+        eventId,
+        recordNumber,
+      });
     } catch (error) {
       console.error("Error opening Event Viewer:", error);
     }
@@ -734,7 +743,11 @@ export function EventList({
                   </div>
                   <button
                     onClick={() =>
-                      handleOpenInViewer(event.log_name, event.event_id)
+                      handleOpenInViewer(
+                        event.log_name,
+                        event.event_id,
+                        event.record_number,
+                      )
                     }
                     className="btn btn-sm btn-primary gap-2"
                     title="Open this event in Windows Event Viewer"

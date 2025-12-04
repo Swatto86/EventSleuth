@@ -406,6 +406,7 @@ describe("EventList Component", () => {
         expect(mockInvoke).toHaveBeenCalledWith("open_event_in_viewer", {
           logName: mockEventLogEntry.log_name,
           eventId: mockEventLogEntry.event_id,
+          recordNumber: mockEventLogEntry.record_number,
         });
       });
     });

@@ -655,6 +655,7 @@ describe("Integration Tests - Complete User Workflows", () => {
         expect(mockInvoke).toHaveBeenCalledWith("open_event_in_viewer", {
           logName: "System",
           eventId: 9999,
+          recordNumber: mockEvent.record_number,
         });
       });
     });
