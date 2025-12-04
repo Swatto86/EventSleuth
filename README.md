@@ -13,8 +13,18 @@ Advanced Windows Event Log Analyzer with powerful search and filtering capabilit
   - Exclude keywords
   - Category filtering
   - Maximum results limit
+- **Detailed Event Information**: 
+  - Event ID (correctly masked to match Windows Event Viewer display)
+  - Event Type (Error, Warning, Information, Audit Success, Audit Failure)
+  - Log Name (Application, System, Security, etc.)
+  - Source (actual event source)
+  - Category number
+  - Record Number (unique identifier)
+  - Computer name
+  - Timestamp
+- **Event Viewer Integration**: Click "View" button to open Windows Event Viewer and jump directly to the specific event
 - **Keyword Highlighting**: Matched keywords are highlighted in search results
-- **CSV Export**: Export search results to CSV format
+- **CSV Export**: Export search results to CSV format with all detailed fields
 - **Theme Support**: 8 built-in themes (Light, Dark, Cupcake, Synthwave, Cyberpunk, Retro, Night, Dracula)
 - **Admin Detection**: Displays warning when not running with administrator privileges
 - **System Tray Integration**: Minimize to system tray with quick show/hide functionality
@@ -24,7 +34,7 @@ Advanced Windows Event Log Analyzer with powerful search and filtering capabilit
 
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, DaisyUI
 - **Backend**: Rust, Tauri 2.0, Windows Event Log API
-- **Testing**: Vitest, @testing-library/react (102 tests)
+- **Testing**: Vitest, @testing-library/react (118 tests)
 
 ## System Requirements
 
@@ -35,7 +45,7 @@ Advanced Windows Event Log Analyzer with powerful search and filtering capabilit
 
 ### Option 1: Using the Installer
 
-1. Download `EventSleuth_1.0.0_x64-setup.exe` from the releases
+1. Download `EventSleuth_1.1.0_x64-setup.exe` from the releases
 2. Run the installer
 3. Follow the installation wizard
 4. Launch EventSleuth from the Start Menu
@@ -89,11 +99,17 @@ Click "Show Advanced Filters" to access:
 - **Sources**: Filter by event sources (comma-separated)
 - **Maximum Results**: Limit the number of results returned (leave empty for unlimited)
 
+### Viewing Events in Windows Event Viewer
+
+1. After performing a search, click the "View" button on any event
+2. Windows Event Viewer will open and filter to show that specific event
+3. This allows you to see additional context and related events in the native viewer
+
 ### Exporting Results
 
 1. After performing a search, click "Export to CSV"
 2. Choose a location to save the file
-3. The CSV will include: Time, Severity, Event ID, Source, and Message
+3. The CSV will include: Time, Log Name, Source, Event ID, Event Type, Severity, Category, Record Number, Computer, and Message
 
 ### Changing Themes
 
@@ -165,6 +181,7 @@ npm test                 # Run tests in watch mode
 - `search_event_logs`: Main search function with comprehensive filtering
 - `get_available_logs`: Enumerate all accessible Windows Event Logs
 - `check_admin_rights`: Detect administrator privileges
+- `open_event_in_viewer`: Launch Windows Event Viewer filtered to specific event
 
 ### Event Filtering Logic
 
@@ -222,6 +239,14 @@ Copyright (c) 2025 Swatto. All rights reserved.
 This is a private project. For bug reports or feature requests, please contact the author.
 
 ## Version History
+
+### v1.1.0 (2025)
+- Enhanced event details display (Event Type, Category, Record Number, Qualifiers)
+- Event Viewer integration - click to jump to exact event in Windows Event Viewer
+- Correct Event ID display (masked to match Windows Event Viewer)
+- Separated Log Name from Source for clarity
+- Expanded CSV export with all detailed fields
+- Updated to 118 comprehensive tests
 
 ### v1.0.0 (2025)
 - Initial release
