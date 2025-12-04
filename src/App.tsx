@@ -21,6 +21,7 @@ interface SearchParams {
 }
 
 interface EventLogEntry {
+  log_name: string;
   source: string;
   time_generated: string;
   event_id: number;
@@ -30,6 +31,7 @@ interface EventLogEntry {
   message: string;
   computer_name: string;
   matches: string[];
+  record_number: number;
 }
 
 const EVENT_TYPES = [
@@ -456,15 +458,39 @@ export function EventList({
   const safeEvents = events || [];
   const eventCount = safeEvents.length;
 
+  const handleOpenInViewer = async (logName: string, eventId: number) => {
+    try {
+      await invoke("open_event_in_viewer", { logName, eventId });
+    } catch (error) {
+      console.error("Error opening Event Viewer:", error);
+    }
+  };
+
   const handleExport = async () => {
     try {
       // Create CSV content
-      const headers = ["Time", "Severity", "Event ID", "Source", "Message"];
+      const headers = [
+        "Time",
+        "Log Name",
+        "Source",
+        "Event ID",
+        "Event Type",
+        "Severity",
+        "Category",
+        "Record Number",
+        "Computer",
+        "Message",
+      ];
       const rows = safeEvents.map((event) => [
         event.time_generated,
-        event.severity,
-        event.event_id,
+        event.log_name,
         event.source,
+        event.event_id,
+        event.event_type,
+        event.severity,
+        event.category,
+        event.record_number,
+        event.computer_name,
         // Replace newlines and quotes in message to maintain CSV format
         event.message.replace(/[\n\r]+/g, " ").replace(/"/g, '""'),
       ]);
@@ -621,8 +647,34 @@ export function EventList({
                       </svg>
                       ID: {event.event_id}
                     </span>
+                    <span className="badge badge-outline badge-sm gap-1">
+                      Type: {event.event_type}
+                    </span>
+                    <span className="badge badge-outline badge-sm gap-1">
+                      Category: {event.category}
+                    </span>
+                    <span className="badge badge-outline badge-sm gap-1">
+                      Record: {event.record_number}
+                    </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-4 text-sm text-base-content/70">
+                    <span className="flex items-center gap-1 font-semibold">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                      Log: {event.log_name}
+                    </span>
                     <span className="flex items-center gap-1">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -638,7 +690,7 @@ export function EventList({
                           d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"
                         />
                       </svg>
-                      {event.source}
+                      Source: {event.source}
                     </span>
                     <span className="flex items-center gap-1">
                       <svg
@@ -655,29 +707,54 @@ export function EventList({
                           d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
                         />
                       </svg>
-                      {event.computer_name}
+                      Computer: {event.computer_name}
                     </span>
                   </div>
                 </div>
-                <div className="text-sm font-medium text-base-content/80 bg-base-300/50 px-3 py-2 rounded-lg whitespace-nowrap flex items-center gap-2">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+                <div className="flex flex-col gap-2">
+                  <div className="text-sm font-medium text-base-content/80 bg-base-300/50 px-3 py-2 rounded-lg whitespace-nowrap flex items-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    {format(
+                      parseISO(event.time_generated),
+                      "dd/MM/yyyy HH:mm:ss",
+                    )}
+                  </div>
+                  <button
+                    onClick={() =>
+                      handleOpenInViewer(event.log_name, event.event_id)
+                    }
+                    className="btn btn-sm btn-primary gap-2"
+                    title="Open this event in Windows Event Viewer"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {format(
-                    parseISO(event.time_generated),
-                    "dd/MM/yyyy HH:mm:ss",
-                  )}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
+                    </svg>
+                    View
+                  </button>
                 </div>
               </div>
               <div className="divider my-3"></div>

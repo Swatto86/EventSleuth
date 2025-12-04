@@ -23,6 +23,7 @@ static TRAY_INIT: Once = Once::new();
 
 #[derive(Debug, Serialize)]
 struct EventLogEntry {
+    log_name: String,
     source: String,
     time_generated: String,
     event_id: u32,
@@ -34,6 +35,7 @@ struct EventLogEntry {
     raw_data: Option<Vec<u8>>,
     user_sid: Option<String>,
     matches: Vec<String>,
+    record_number: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -266,22 +268,23 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                                     should_include = false;
                                 }
 
+                                // Extract source name for filtering and storage
+                                let source_name = {
+                                    let string_offset = offset + (*record).StringOffset as usize;
+                                    let string_ptr =
+                                        record_buffer[string_offset..].as_ptr() as *const u16;
+                                    let mut string_len = 0;
+                                    while *string_ptr.add(string_len) != 0 {
+                                        string_len += 1;
+                                    }
+                                    String::from_utf16(std::slice::from_raw_parts(
+                                        string_ptr, string_len,
+                                    ))
+                                    .unwrap_or_default()
+                                };
+
                                 // Source filter
                                 if !params.sources.is_empty() {
-                                    let source_name = {
-                                        let string_offset =
-                                            offset + (*record).StringOffset as usize;
-                                        let string_ptr =
-                                            record_buffer[string_offset..].as_ptr() as *const u16;
-                                        let mut string_len = 0;
-                                        while *string_ptr.add(string_len) != 0 {
-                                            string_len += 1;
-                                        }
-                                        String::from_utf16(std::slice::from_raw_parts(
-                                            string_ptr, string_len,
-                                        ))
-                                        .unwrap_or_default()
-                                    };
                                     if !params
                                         .sources
                                         .iter()
@@ -371,7 +374,8 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
 
                                     if should_include {
                                         results.push(EventLogEntry {
-                                            source: log_name.clone(),
+                                            log_name: log_name.clone(),
+                                            source: source_name,
                                             time_generated: chrono::DateTime::from_timestamp(
                                                 time_generated,
                                                 0,
@@ -388,6 +392,7 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
                                             raw_data: None,
                                             user_sid: None,
                                             matches,
+                                            record_number: (*record).RecordNumber,
                                         });
                                     }
                                 }
@@ -418,6 +423,24 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
 
     println!("Search complete. Found {} results", results.len());
     Ok(results)
+}
+
+#[tauri::command]
+async fn open_event_in_viewer(log_name: String, _event_id: u32) -> Result<(), String> {
+    use std::process::Command;
+
+    // Use PowerShell to open Event Viewer with a filter for the specific event
+    let script = format!(
+        r#"Start-Process eventvwr.msc "/c:{}" -Verb RunAs"#,
+        log_name
+    );
+
+    Command::new("powershell")
+        .args(&["-Command", &script])
+        .spawn()
+        .map_err(|e| format!("Failed to open Event Viewer: {}", e))?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -619,7 +642,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             search_event_logs,
             get_available_logs,
-            check_admin_rights // Add this to the invoke handler
+            check_admin_rights,
+            open_event_in_viewer
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

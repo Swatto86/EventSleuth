@@ -390,6 +390,96 @@ describe("App Component", () => {
         ).toBeInTheDocument();
       });
     });
+
+    it("should display detailed event information in search results", async () => {
+      mockInvoke.mockImplementation((command) => {
+        if (command === "check_admin_rights") return Promise.resolve(true);
+        if (command === "search_event_logs") {
+          return Promise.resolve([mockEventLogEntry]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const user = userEvent.setup();
+      render(<App />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /search events/i }),
+        ).toBeInTheDocument();
+      });
+
+      const searchButton = screen.getByRole("button", {
+        name: /search events/i,
+      });
+      await user.click(searchButton);
+
+      await waitFor(() => {
+        // Check for log name
+        expect(
+          screen.getByText(
+            new RegExp(`Log: ${mockEventLogEntry.log_name}`, "i"),
+          ),
+        ).toBeInTheDocument();
+        // Check for event type
+        expect(
+          screen.getByText(
+            new RegExp(`Type: ${mockEventLogEntry.event_type}`, "i"),
+          ),
+        ).toBeInTheDocument();
+        // Check for category
+        expect(
+          screen.getByText(
+            new RegExp(`Category: ${mockEventLogEntry.category}`, "i"),
+          ),
+        ).toBeInTheDocument();
+        // Check for record number
+        expect(
+          screen.getByText(
+            new RegExp(`Record: ${mockEventLogEntry.record_number}`, "i"),
+          ),
+        ).toBeInTheDocument();
+        // Check for computer name
+        expect(
+          screen.getByText(
+            new RegExp(`Computer: ${mockEventLogEntry.computer_name}`, "i"),
+          ),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it("should display View button for opening events in Event Viewer", async () => {
+      mockInvoke.mockImplementation((command) => {
+        if (command === "check_admin_rights") return Promise.resolve(true);
+        if (command === "search_event_logs") {
+          return Promise.resolve([mockEventLogEntry]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const user = userEvent.setup();
+      render(<App />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /search events/i }),
+        ).toBeInTheDocument();
+      });
+
+      const searchButton = screen.getByRole("button", {
+        name: /search events/i,
+      });
+      await user.click(searchButton);
+
+      await waitFor(() => {
+        const viewButton = screen.getByRole("button", { name: /view/i });
+        expect(viewButton).toBeInTheDocument();
+        expect(viewButton).toHaveAttribute(
+          "title",
+          "Open this event in Windows Event Viewer",
+        );
+      });
+    });
   });
 
   describe("Clear Results Functionality", () => {

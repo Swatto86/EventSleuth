@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EventList } from "../App";
@@ -8,6 +8,8 @@ import {
   mockEventLogEntryCritical,
   setupExport,
   createMockEvent,
+  mockWriteFile,
+  mockInvoke,
 } from "../test-utils/setup";
 
 describe("EventList Component", () => {
@@ -79,7 +81,7 @@ describe("EventList Component", () => {
       expect(
         screen.getByText(`ID: ${mockEventLogEntry.event_id}`),
       ).toBeInTheDocument();
-      expect(screen.getByText(mockEventLogEntry.source)).toBeInTheDocument();
+      expect(screen.getByText(/Source: TestSource/i)).toBeInTheDocument();
     });
 
     it("should display multiple events", () => {
@@ -144,7 +146,57 @@ describe("EventList Component", () => {
         <EventList events={[event]} isLoading={false} onClear={mockOnClear} />,
       );
 
-      expect(screen.getByText("TestSource")).toBeInTheDocument();
+      expect(screen.getByText(/Source: TestSource/i)).toBeInTheDocument();
+    });
+
+    it("should display log name", () => {
+      const event = createMockEvent({ log_name: "Application" });
+
+      render(
+        <EventList events={[event]} isLoading={false} onClear={mockOnClear} />,
+      );
+
+      expect(screen.getByText(/Log: Application/i)).toBeInTheDocument();
+    });
+
+    it("should display event type", () => {
+      const event = createMockEvent({ event_type: "Error" });
+
+      render(
+        <EventList events={[event]} isLoading={false} onClear={mockOnClear} />,
+      );
+
+      expect(screen.getByText(/Type: Error/i)).toBeInTheDocument();
+    });
+
+    it("should display category", () => {
+      const event = createMockEvent({ category: 42 });
+
+      render(
+        <EventList events={[event]} isLoading={false} onClear={mockOnClear} />,
+      );
+
+      expect(screen.getByText(/Category: 42/i)).toBeInTheDocument();
+    });
+
+    it("should display record number", () => {
+      const event = createMockEvent({ record_number: 99999 });
+
+      render(
+        <EventList events={[event]} isLoading={false} onClear={mockOnClear} />,
+      );
+
+      expect(screen.getByText(/Record: 99999/i)).toBeInTheDocument();
+    });
+
+    it("should display computer name with label", () => {
+      const event = createMockEvent({ computer_name: "SERVER-01" });
+
+      render(
+        <EventList events={[event]} isLoading={false} onClear={mockOnClear} />,
+      );
+
+      expect(screen.getByText(/Computer: SERVER-01/i)).toBeInTheDocument();
     });
   });
 
@@ -318,8 +370,55 @@ describe("EventList Component", () => {
         name: /clear results/i,
       });
       await user.click(clearButton);
-
       expect(mockOnClear).toHaveBeenCalledTimes(1);
+    });
+
+    it("should show View button for each event", () => {
+      render(
+        <EventList
+          events={[mockEventLogEntry]}
+          isLoading={false}
+          onClear={mockOnClear}
+        />,
+      );
+
+      const viewButton = screen.getByRole("button", { name: /view/i });
+      expect(viewButton).toBeInTheDocument();
+    });
+
+    it("should call open_event_in_viewer when View button is clicked", async () => {
+      const user = userEvent.setup();
+      mockInvoke.mockResolvedValue(undefined);
+
+      render(
+        <EventList
+          events={[mockEventLogEntry]}
+          isLoading={false}
+          onClear={mockOnClear}
+        />,
+      );
+
+      const viewButton = screen.getByRole("button", { name: /view/i });
+      await user.click(viewButton);
+
+      // Wait for the async call
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith("open_event_in_viewer", {
+          logName: mockEventLogEntry.log_name,
+          eventId: mockEventLogEntry.event_id,
+        });
+      });
+    });
+
+    it("should show View button for multiple events", () => {
+      const events = [mockEventLogEntry, mockEventLogEntryWarning];
+
+      render(
+        <EventList events={events} isLoading={false} onClear={mockOnClear} />,
+      );
+
+      const viewButtons = screen.getAllByRole("button", { name: /view/i });
+      expect(viewButtons).toHaveLength(2);
     });
   });
 
@@ -385,6 +484,48 @@ describe("EventList Component", () => {
       await user.click(exportButton);
 
       expect(exportButton).toBeInTheDocument();
+      expect(mockWriteFile).toHaveBeenCalled();
+    });
+
+    it("should export all new fields to CSV", async () => {
+      setupExport();
+      const user = userEvent.setup();
+
+      const event = createMockEvent({
+        log_name: "System",
+        source: "TestSource",
+        event_id: 1234,
+        event_type: "Warning",
+        category: 5,
+        record_number: 99999,
+        computer_name: "TEST-PC",
+      });
+
+      render(
+        <EventList events={[event]} isLoading={false} onClear={mockOnClear} />,
+      );
+
+      const exportButton = screen.getByRole("button", {
+        name: /export to csv/i,
+      });
+      await user.click(exportButton);
+
+      expect(mockWriteFile).toHaveBeenCalled();
+      const csvData = new TextDecoder().decode(
+        mockWriteFile.mock.calls[0][1] as Uint8Array,
+      );
+
+      // Check that CSV contains all the new fields
+      expect(csvData).toContain("Log Name");
+      expect(csvData).toContain("Event Type");
+      expect(csvData).toContain("Category");
+      expect(csvData).toContain("Record Number");
+      expect(csvData).toContain("Computer");
+      expect(csvData).toContain("System");
+      expect(csvData).toContain("TestSource");
+      expect(csvData).toContain("Warning");
+      expect(csvData).toContain("5");
+      expect(csvData).toContain("99999");
     });
   });
 

@@ -473,8 +473,10 @@ describe("Integration Tests - Complete User Workflows", () => {
         const writtenData = mockWriteFile.mock.calls[0][1];
         const csvContent = new TextDecoder().decode(writtenData);
 
-        // Verify CSV formatting
-        expect(csvContent).toContain("Time,Severity,Event ID,Source,Message");
+        // Verify CSV formatting with new fields
+        expect(csvContent).toContain(
+          "Time,Log Name,Source,Event ID,Event Type,Severity,Category,Record Number,Computer,Message",
+        );
         expect(csvContent).toContain('""'); // Escaped quotes
         expect(csvContent).toMatch(/"[^"]*"/); // Quoted fields
       });
@@ -559,6 +561,239 @@ describe("Integration Tests - Complete User Workflows", () => {
       // Verify all events are accessible
       const events = screen.getAllByText(/Event number \d+/);
       expect(events.length).toBe(100);
+    });
+  });
+
+  describe("Detailed Event Information Workflow", () => {
+    it("should display all detailed event information after search", async () => {
+      const mockEvent = createMockEvent({
+        log_name: "Application",
+        source: "TestApp",
+        event_id: 5678,
+        event_type: "Warning",
+        severity: "Warning",
+        category: 10,
+        record_number: 123456,
+        computer_name: "WORKSTATION-01",
+        message: "Test warning message",
+        matches: ["warning"],
+      });
+
+      mockInvoke.mockImplementation((command) => {
+        if (command === "check_admin_rights") return Promise.resolve(true);
+        if (command === "search_event_logs")
+          return Promise.resolve([mockEvent]);
+        return Promise.resolve([]);
+      });
+
+      const user = userEvent.setup();
+      render(<App />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /search events/i }),
+        ).toBeInTheDocument();
+      });
+
+      const searchButton = screen.getByRole("button", {
+        name: /search events/i,
+      });
+      await user.click(searchButton);
+
+      // Verify all detailed fields are displayed
+      await waitFor(() => {
+        expect(screen.getByText(/Log: Application/i)).toBeInTheDocument();
+        expect(screen.getByText(/Source: TestApp/i)).toBeInTheDocument();
+        expect(screen.getByText(/ID: 5678/i)).toBeInTheDocument();
+        expect(screen.getByText(/Type: Warning/i)).toBeInTheDocument();
+        expect(screen.getByText(/Category: 10/i)).toBeInTheDocument();
+        expect(screen.getByText(/Record: 123456/i)).toBeInTheDocument();
+        expect(
+          screen.getByText(/Computer: WORKSTATION-01/i),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it("should handle Event Viewer button interaction", async () => {
+      const mockEvent = createMockEvent({
+        log_name: "System",
+        event_id: 9999,
+      });
+
+      mockInvoke.mockImplementation((command) => {
+        if (command === "check_admin_rights") return Promise.resolve(true);
+        if (command === "search_event_logs")
+          return Promise.resolve([mockEvent]);
+        if (command === "open_event_in_viewer") return Promise.resolve();
+        return Promise.resolve([]);
+      });
+
+      const user = userEvent.setup();
+      render(<App />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /search events/i }),
+        ).toBeInTheDocument();
+      });
+
+      const searchButton = screen.getByRole("button", {
+        name: /search events/i,
+      });
+      await user.click(searchButton);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /view/i }),
+        ).toBeInTheDocument();
+      });
+
+      const viewButton = screen.getByRole("button", { name: /view/i });
+      await user.click(viewButton);
+
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith("open_event_in_viewer", {
+          logName: "System",
+          eventId: 9999,
+        });
+      });
+    });
+
+    it("should export detailed event information to CSV", async () => {
+      const mockEvent = createMockEvent({
+        log_name: "Security",
+        source: "SecurityApp",
+        event_id: 4624,
+        event_type: "Information",
+        severity: "Information",
+        category: 12544,
+        record_number: 987654,
+        computer_name: "SERVER-01",
+        message: "An account was successfully logged on",
+      });
+
+      mockInvoke.mockImplementation((command) => {
+        if (command === "check_admin_rights") return Promise.resolve(true);
+        if (command === "search_event_logs")
+          return Promise.resolve([mockEvent]);
+        return Promise.resolve([]);
+      });
+
+      mockSave.mockResolvedValue("C:/test/detailed_export.csv");
+      mockWriteFile.mockResolvedValue(undefined);
+
+      const user = userEvent.setup();
+      render(<App />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /search events/i }),
+        ).toBeInTheDocument();
+      });
+
+      const searchButton = screen.getByRole("button", {
+        name: /search events/i,
+      });
+      await user.click(searchButton);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /export to csv/i }),
+        ).toBeInTheDocument();
+      });
+
+      const exportButton = screen.getByRole("button", {
+        name: /export to csv/i,
+      });
+      await user.click(exportButton);
+
+      await waitFor(() => {
+        expect(mockWriteFile).toHaveBeenCalled();
+      });
+
+      // Verify CSV contains all new fields
+      const csvData = new TextDecoder().decode(
+        mockWriteFile.mock.calls[0][1] as Uint8Array,
+      );
+
+      expect(csvData).toContain("Log Name");
+      expect(csvData).toContain("Event Type");
+      expect(csvData).toContain("Category");
+      expect(csvData).toContain("Record Number");
+      expect(csvData).toContain("Security");
+      expect(csvData).toContain("SecurityApp");
+      expect(csvData).toContain("Information");
+      expect(csvData).toContain("12544");
+      expect(csvData).toContain("987654");
+      expect(csvData).toContain("SERVER-01");
+    });
+
+    it("should display detailed information for multiple events", async () => {
+      const mockEvents = [
+        createMockEvent({
+          log_name: "Application",
+          source: "App1",
+          event_id: 1000,
+          event_type: "Error",
+          category: 1,
+          record_number: 100001,
+        }),
+        createMockEvent({
+          log_name: "System",
+          source: "Sys1",
+          event_id: 2000,
+          event_type: "Warning",
+          category: 2,
+          record_number: 100002,
+        }),
+        createMockEvent({
+          log_name: "Security",
+          source: "Sec1",
+          event_id: 3000,
+          event_type: "Information",
+          category: 3,
+          record_number: 100003,
+        }),
+      ];
+
+      mockInvoke.mockImplementation((command) => {
+        if (command === "check_admin_rights") return Promise.resolve(true);
+        if (command === "search_event_logs") return Promise.resolve(mockEvents);
+        return Promise.resolve([]);
+      });
+
+      const user = userEvent.setup();
+      render(<App />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /search events/i }),
+        ).toBeInTheDocument();
+      });
+
+      const searchButton = screen.getByRole("button", {
+        name: /search events/i,
+      });
+      await user.click(searchButton);
+
+      await waitFor(() => {
+        // Verify each event shows its detailed information
+        expect(screen.getByText(/Log: Application/i)).toBeInTheDocument();
+        expect(screen.getByText(/Source: App1/i)).toBeInTheDocument();
+        expect(screen.getByText(/Record: 100001/i)).toBeInTheDocument();
+
+        expect(screen.getByText(/Log: System/i)).toBeInTheDocument();
+        expect(screen.getByText(/Source: Sys1/i)).toBeInTheDocument();
+        expect(screen.getByText(/Record: 100002/i)).toBeInTheDocument();
+
+        expect(screen.getByText(/Log: Security/i)).toBeInTheDocument();
+        expect(screen.getByText(/Source: Sec1/i)).toBeInTheDocument();
+        expect(screen.getByText(/Record: 100003/i)).toBeInTheDocument();
+
+        // Verify each event has a View button
+        const viewButtons = screen.getAllByRole("button", { name: /view/i });
+        expect(viewButtons).toHaveLength(3);
+      });
     });
   });
 });
