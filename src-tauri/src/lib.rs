@@ -18,6 +18,10 @@ use windows::Win32::System::EventLog::{
     READ_EVENT_LOG_READ_FLAGS,
 };
 use windows::Win32::System::Registry::*;
+use windows::Win32::System::Threading::{
+    CreateProcessW, PROCESS_INFORMATION, STARTF_USESHOWWINDOW, STARTUPINFOW,
+};
+use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
 static TRAY_INIT: Once = Once::new();
 
@@ -426,21 +430,54 @@ async fn search_event_logs(params: SearchParams) -> Result<Vec<EventLogEntry>, S
 }
 
 #[tauri::command]
-async fn open_event_in_viewer(log_name: String, _event_id: u32) -> Result<(), String> {
-    use std::process::Command;
+async fn open_event_in_viewer(log_name: String, event_id: u32) -> Result<(), String> {
+    unsafe {
+        // Build the Event Viewer command with filter to jump to specific event
+        // Format: eventvwr.msc /c:LogName /f:"*[System[(EventID=1234)]]"
+        let filter = format!(
+            r#"eventvwr.msc /c:{} /f:"*[System[(EventID={})]]""#,
+            log_name, event_id
+        );
 
-    // Use PowerShell to open Event Viewer with a filter for the specific event
-    let script = format!(
-        r#"Start-Process eventvwr.msc "/c:{}" -Verb RunAs"#,
-        log_name
-    );
+        // Convert to wide string (UTF-16)
+        let mut cmd_line: Vec<u16> = filter.encode_utf16().chain(std::iter::once(0)).collect();
 
-    Command::new("powershell")
-        .args(&["-Command", &script])
-        .spawn()
-        .map_err(|e| format!("Failed to open Event Viewer: {}", e))?;
+        let si = STARTUPINFOW {
+            cb: std::mem::size_of::<STARTUPINFOW>() as u32,
+            dwFlags: STARTF_USESHOWWINDOW,
+            wShowWindow: SW_HIDE.0 as u16,
+            ..Default::default()
+        };
 
-    Ok(())
+        let mut pi = PROCESS_INFORMATION::default();
+
+        let result = CreateProcessW(
+            None,
+            PWSTR(cmd_line.as_mut_ptr()),
+            None,
+            None,
+            false,
+            windows::Win32::System::Threading::CREATE_NO_WINDOW,
+            None,
+            None,
+            &si,
+            &mut pi,
+        );
+
+        match result {
+            Ok(_) => {
+                // Close handles as we don't need to wait for the process
+                if pi.hProcess.0 != 0 {
+                    let _ = windows::Win32::Foundation::CloseHandle(pi.hProcess);
+                }
+                if pi.hThread.0 != 0 {
+                    let _ = windows::Win32::Foundation::CloseHandle(pi.hThread);
+                }
+                Ok(())
+            }
+            Err(e) => Err(format!("Failed to open Event Viewer: {}", e)),
+        }
+    }
 }
 
 #[tauri::command]
