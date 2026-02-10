@@ -5,6 +5,10 @@ edition = "2021"
 description = "A fast, filterable Windows Event Log viewer"
 authors = ["EventSleuth"]
 
+[[bin]]
+name = "EventSleuth"
+path = "src/main.rs"
+
 [dependencies]
 eframe = { version = "0.31", default-features = true }
 egui = "0.31"

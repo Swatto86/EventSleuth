@@ -3,6 +3,9 @@
 //! Entry point: initialises structured logging and launches the eframe
 //! application window.
 
+// Hide the console window in release builds on Windows.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 // Declare crate modules
 mod app;
 mod core;

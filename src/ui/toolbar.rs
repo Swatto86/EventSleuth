@@ -62,8 +62,13 @@ impl EventSleuthApp {
 
             // ── Right-aligned app title + about ───────────────────────
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui
-                    .small_button("ℹ️")
+                let about_btn = ui.add(
+                    egui::Button::new(
+                        egui::RichText::new("ℹ").size(14.0)
+                    )
+                    .min_size(egui::vec2(22.0, 22.0)),
+                );
+                if about_btn
                     .on_hover_text("About EventSleuth")
                     .clicked()
                 {
@@ -98,7 +103,8 @@ impl EventSleuthApp {
                 // Search box
                 ui.horizontal(|ui| {
                     ui.label("🔎 Search:");
-                    ui.text_edit_singleline(&mut self.channel_search);
+                    let ch_search = ui.text_edit_singleline(&mut self.channel_search);
+                    ch_search.on_hover_text("Type to filter the channel list below.\nExample: \"Security\" or \"Microsoft\"");
                 });
 
                 ui.separator();
