@@ -218,7 +218,7 @@ impl EventSleuthApp {
         self.cancel_loading();
 
         if self.selected_channels.is_empty() {
-            self.status_text = "No channels selected".into();
+            self.status_text = "No sources selected".into();
             return;
         }
 

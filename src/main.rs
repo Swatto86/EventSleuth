@@ -16,7 +16,66 @@ mod util;
 use app::EventSleuthApp;
 use util::constants;
 
+/// Guard that holds the single-instance mutex for the lifetime of the process.
+/// When dropped the OS automatically releases the mutex.
+struct SingleInstanceGuard {
+    _handle: windows::Win32::Foundation::HANDLE,
+}
+
+impl Drop for SingleInstanceGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(self._handle);
+        }
+    }
+}
+
+/// Attempt to acquire a named mutex. Returns `Some(guard)` if this is the
+/// first instance, or `None` if another instance already holds the mutex.
+fn acquire_single_instance() -> Option<SingleInstanceGuard> {
+    use windows::core::w;
+    use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
+    use windows::Win32::System::Threading::CreateMutexW;
+
+    let handle = unsafe {
+        CreateMutexW(None, true, w!("Global\\EventSleuth_SingleInstance"))
+    };
+
+    match handle {
+        Ok(h) => {
+            // Check if the mutex already existed (another instance owns it)
+            let last_err = unsafe { windows::Win32::Foundation::GetLastError() };
+            if last_err == ERROR_ALREADY_EXISTS {
+                unsafe { let _ = windows::Win32::Foundation::CloseHandle(h); }
+                None
+            } else {
+                Some(SingleInstanceGuard { _handle: h })
+            }
+        }
+        Err(_) => None,
+    }
+}
+
 fn main() -> eframe::Result<()> {
+    // Enforce single instance
+    let _instance_guard = match acquire_single_instance() {
+        Some(guard) => guard,
+        None => {
+            // Another instance is already running — show a message box and exit
+            use windows::core::w;
+            use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK, MB_ICONINFORMATION};
+            unsafe {
+                MessageBoxW(
+                    None,
+                    w!("EventSleuth is already running."),
+                    w!("EventSleuth"),
+                    MB_OK | MB_ICONINFORMATION,
+                );
+            }
+            return Ok(());
+        }
+    };
+
     // Initialise structured logging via tracing-subscriber.
     // Logs go to stderr; set RUST_LOG=debug for verbose output.
     tracing_subscriber::fmt()

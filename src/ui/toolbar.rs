@@ -12,18 +12,18 @@ impl EventSleuthApp {
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
 
-            // ── Channel selector button ─────────────────────────────
+            // ── Source selector button ─────────────────────────
             let channel_label = if self.selected_channels.is_empty() {
-                "Select Channels…".to_string()
+                "Select Sources…".to_string()
             } else if self.selected_channels.len() == 1 {
                 self.selected_channels[0].clone()
             } else {
-                format!("{} channels", self.selected_channels.len())
+                format!("{} sources", self.selected_channels.len())
             };
 
             if ui
                 .button(format!("📋 {channel_label}"))
-                .on_hover_text("Choose which log channels to query")
+                .on_hover_text("Choose which log sources to query")
                 .clicked()
             {
                 self.show_channel_selector = !self.show_channel_selector;
@@ -40,7 +40,7 @@ impl EventSleuthApp {
             } else {
                 let refresh = ui
                     .button("🔄 Refresh")
-                    .on_hover_text("Re-query selected channels");
+                    .on_hover_text("Re-query selected sources");
                 if refresh.clicked() {
                     self.start_loading();
                 }
@@ -84,16 +84,16 @@ impl EventSleuthApp {
         });
     }
 
-    /// Render the channel selector popup window (if visible).
+    /// Render the source selector popup window (if visible).
     ///
-    /// Shows a searchable list of all discovered channels with checkboxes.
+    /// Shows a searchable list of all discovered sources with checkboxes.
     pub fn render_channel_selector(&mut self, ctx: &egui::Context) {
         if !self.show_channel_selector {
             return;
         }
 
         let mut open = true;
-        egui::Window::new("📋 Select Channels")
+        egui::Window::new("📋 Select Sources")
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
@@ -104,7 +104,7 @@ impl EventSleuthApp {
                 ui.horizontal(|ui| {
                     ui.label("🔎 Search:");
                     let ch_search = ui.text_edit_singleline(&mut self.channel_search);
-                    ch_search.on_hover_text("Type to filter the channel list below.\nExample: \"Security\" or \"Microsoft\"");
+                    ch_search.on_hover_text("Type to filter the source list below.\nExample: \"Security\" or \"Microsoft\"");
                 });
 
                 ui.separator();
@@ -125,7 +125,7 @@ impl EventSleuthApp {
 
                 ui.separator();
 
-                // Channel list with checkboxes
+                // Source list with checkboxes
                 let search_lower = self.channel_search.to_lowercase();
                 egui::ScrollArea::vertical()
                     .max_height(300.0)
