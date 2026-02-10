@@ -39,7 +39,7 @@ fn main() -> eframe::Result<()> {
     // Configure the native window
     let mut viewport = egui::ViewportBuilder::default()
         .with_title(format!(
-            "🔍 {} v{}",
+            "{} v{}",
             constants::APP_NAME,
             constants::APP_VERSION
         ))

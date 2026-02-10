@@ -481,7 +481,7 @@ impl EventSleuthApp {
         }
 
         let mut open = true;
-        egui::Window::new("ℹ️ About")
+        egui::Window::new("About")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
