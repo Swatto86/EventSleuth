@@ -22,7 +22,7 @@ impl EventSleuthApp {
             };
 
             if ui
-                .button(format!("# {channel_label}"))
+                .button(format!("📋 {channel_label}"))
                 .on_hover_text("Choose which log channels to query")
                 .clicked()
             {
@@ -34,12 +34,12 @@ impl EventSleuthApp {
             // ── Refresh / Cancel ────────────────────────────────────
             if self.is_loading {
                 ui.spinner();
-                if ui.button("Stop").clicked() {
+                if ui.button("⏹ Stop").clicked() {
                     self.cancel_loading();
                 }
             } else {
                 let refresh = ui
-                    .button("Refresh")
+                    .button("🔄 Refresh")
                     .on_hover_text("Re-query selected channels");
                 if refresh.clicked() {
                     self.start_loading();
@@ -49,12 +49,12 @@ impl EventSleuthApp {
             ui.separator();
 
             // ── Export dropdown ──────────────────────────────────────
-            ui.menu_button("Export", |ui| {
-                if ui.button("Export to CSV…").clicked() {
+            ui.menu_button("📤 Export", |ui| {
+                if ui.button("📄 Export to CSV…").clicked() {
                     self.export_csv();
                     ui.close_menu();
                 }
-                if ui.button("Export to JSON…").clicked() {
+                if ui.button("📋 Export to JSON…").clicked() {
                     self.export_json();
                     ui.close_menu();
                 }
@@ -63,14 +63,14 @@ impl EventSleuthApp {
             // ── Right-aligned app title + about ───────────────────────
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
-                    .small_button("(i)")
+                    .small_button("ℹ️")
                     .on_hover_text("About EventSleuth")
                     .clicked()
                 {
                     self.show_about = true;
                 }
                 ui.label(
-                    egui::RichText::new("EventSleuth")
+                    egui::RichText::new("🔍 EventSleuth")
                         .color(theme::ACCENT)
                         .strong()
                         .size(16.0),
@@ -88,7 +88,7 @@ impl EventSleuthApp {
         }
 
         let mut open = true;
-        egui::Window::new("Select Channels")
+        egui::Window::new("📋 Select Channels")
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
@@ -97,7 +97,7 @@ impl EventSleuthApp {
             .show(ctx, |ui| {
                 // Search box
                 ui.horizontal(|ui| {
-                    ui.label("Search:");
+                    ui.label("🔎 Search:");
                     ui.text_edit_singleline(&mut self.channel_search);
                 });
 
@@ -105,14 +105,14 @@ impl EventSleuthApp {
 
                 // Quick select / deselect
                 ui.horizontal(|ui| {
-                    if ui.small_button("Common").clicked() {
+                    if ui.small_button("⭐ Common").clicked() {
                         self.selected_channels =
                             crate::core::channel_enumerator::common_channels(&self.channels);
                     }
-                    if ui.small_button("All").clicked() {
+                    if ui.small_button("☑️ All").clicked() {
                         self.selected_channels = self.channels.clone();
                     }
-                    if ui.small_button("None").clicked() {
+                    if ui.small_button("✖ None").clicked() {
                         self.selected_channels.clear();
                     }
                 });

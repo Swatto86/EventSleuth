@@ -35,18 +35,18 @@ impl EventSleuthApp {
             if self.is_loading {
                 ui.spinner();
                 let progress = format!(
-                    "Loading… {} events ({})",
+                    "⏳ Loading… {} events ({})",
                     self.progress_count, self.progress_channel
                 );
                 ui.label(egui::RichText::new(progress).color(theme::TEXT_SECONDARY));
             } else {
-                ui.label(egui::RichText::new("Ready").color(theme::ACCENT_DIM));
+                ui.label(egui::RichText::new("✅ Ready").color(theme::ACCENT_DIM));
             }
 
             // ── Errors indicator ────────────────────────────────────────
             if !self.errors.is_empty() {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let err_text = format!("!! {} error(s)", self.errors.len());
+                    let err_text = format!("⚠️ {} error(s)", self.errors.len());
                     let response =
                         ui.label(egui::RichText::new(err_text).color(theme::LEVEL_WARNING));
                     // Show error details on hover

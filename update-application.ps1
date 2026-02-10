@@ -3,7 +3,7 @@
 # Or run without parameters to be prompted for the version and release notes
 #
 # WHAT THIS SCRIPT DOES:
-# 1. Updates version in: Cargo.toml
+# 1. Updates version in: Cargo.toml (propagates to window title, About dialog via CARGO_PKG_VERSION)
 # 2. Commits the version changes
 # 3. Deletes ALL previous git tags and GitHub releases (keeps only the new release)
 # 4. Creates a new annotated git tag with your release notes

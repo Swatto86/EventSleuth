@@ -481,17 +481,17 @@ impl EventSleuthApp {
         }
 
         let mut open = true;
-        egui::Window::new("About")
+        egui::Window::new("ℹ️ About")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .fixed_size([260.0, 0.0])
+            .fixed_size([320.0, 0.0])
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(8.0);
                     ui.label(
-                        egui::RichText::new("EventSleuth")
+                        egui::RichText::new("🔍 EventSleuth")
                             .color(crate::ui::theme::ACCENT)
                             .strong()
                             .size(20.0),
@@ -504,8 +504,13 @@ impl EventSleuthApp {
                     ui.label("A fast, filterable Windows Event Log viewer");
                     ui.add_space(12.0);
                     ui.label(
-                        egui::RichText::new("Developer: Swatto")
+                        egui::RichText::new("👤 Developer: Swatto")
                             .color(crate::ui::theme::TEXT_SECONDARY),
+                    );
+                    ui.add_space(4.0);
+                    ui.hyperlink_to(
+                        "🔗 github.com/Swatto86/EventSleuth",
+                        crate::util::constants::APP_GITHUB_URL,
                     );
                     ui.add_space(8.0);
                 });

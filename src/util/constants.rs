@@ -42,3 +42,6 @@ pub const APP_NAME: &str = "EventSleuth";
 
 /// Application version string.
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// GitHub repository URL.
+pub const APP_GITHUB_URL: &str = "https://github.com/Swatto86/EventSleuth";

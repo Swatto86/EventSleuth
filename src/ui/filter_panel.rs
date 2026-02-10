@@ -10,13 +10,13 @@ impl EventSleuthApp {
     /// All filter inputs modify `self.filter`. Changes are applied either
     /// on each keystroke (debounced) or when the user presses **Apply**.
     pub fn render_filter_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading(egui::RichText::new("Filters").color(theme::ACCENT));
+        ui.heading(egui::RichText::new("🔍 Filters").color(theme::ACCENT));
         ui.separator();
 
         let mut changed = false;
 
         // ── Event ID ────────────────────────────────────────────────
-        ui.label("Event ID");
+        ui.label("🆔 Event ID");
         ui.add(
             egui::TextEdit::singleline(&mut self.filter.event_id_input)
                 .hint_text("e.g. 1001, 4000-4999, !7036")
@@ -25,8 +25,8 @@ impl EventSleuthApp {
         ui.add_space(4.0);
 
         // ── Severity levels ─────────────────────────────────────────
-        ui.label("Level");
-        let level_names = ["LogAlways", "Critical", "Error", "Warning", "Info", "Verbose"];
+        ui.label("📊 Level");
+        let level_names = ["LogAlways", "🔴 Critical", "🟠 Error", "🟡 Warning", "🔵 Info", "⚪ Verbose"];
         let level_colors = [
             theme::LEVEL_DEFAULT,
             theme::LEVEL_CRITICAL,
@@ -44,7 +44,7 @@ impl EventSleuthApp {
         ui.add_space(4.0);
 
         // ── Provider ────────────────────────────────────────────────
-        ui.label("Provider");
+        ui.label("🏷️ Provider");
         ui.add(
             egui::TextEdit::singleline(&mut self.filter.provider_filter)
                 .hint_text("Substring match")
@@ -53,7 +53,7 @@ impl EventSleuthApp {
         ui.add_space(4.0);
 
         // ── Text search ─────────────────────────────────────────────
-        ui.label("Search");
+        ui.label("🔎 Search");
         ui.add(
             egui::TextEdit::singleline(&mut self.filter.text_search)
                 .hint_text("Search all fields")
@@ -63,13 +63,13 @@ impl EventSleuthApp {
         ui.add_space(4.0);
 
         // ── Time range ──────────────────────────────────────────────
-        ui.label("Time From");
+        ui.label("🕐 Time From");
         ui.add(
             egui::TextEdit::singleline(&mut self.filter.time_from_input)
                 .hint_text("YYYY-MM-DD HH:MM:SS")
                 .desired_width(f32::INFINITY),
         );
-        ui.label("Time To");
+        ui.label("🕐 Time To");
         ui.add(
             egui::TextEdit::singleline(&mut self.filter.time_to_input)
                 .hint_text("YYYY-MM-DD HH:MM:SS")
@@ -79,7 +79,7 @@ impl EventSleuthApp {
         ui.add_space(4.0);
 
         // ── Time presets ────────────────────────────────────────────
-        ui.label(egui::RichText::new("Quick presets").color(theme::TEXT_SECONDARY));
+        ui.label(egui::RichText::new("⚡ Quick presets").color(theme::TEXT_SECONDARY));
         ui.horizontal_wrapped(|ui| {
             if ui.small_button("1h").clicked() {
                 self.filter.apply_time_preset(1);
@@ -112,12 +112,12 @@ impl EventSleuthApp {
         // ── Apply / Clear buttons ───────────────────────────────────
         ui.horizontal(|ui| {
             if ui
-                .button(egui::RichText::new("Apply").color(theme::ACCENT))
+                .button(egui::RichText::new("✅ Apply").color(theme::ACCENT))
                 .clicked()
             {
                 changed = true;
             }
-            if ui.button("Clear").clicked() {
+            if ui.button("🗑️ Clear").clicked() {
                 self.filter.clear();
                 changed = true;
             }
@@ -127,7 +127,7 @@ impl EventSleuthApp {
         if !self.filter.is_empty() {
             ui.add_space(4.0);
             ui.label(
-                egui::RichText::new("● Filters active")
+                egui::RichText::new("🟢 Filters active")
                     .color(theme::ACCENT)
                     .small(),
             );

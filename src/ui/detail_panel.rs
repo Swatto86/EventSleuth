@@ -15,7 +15,7 @@ impl EventSleuthApp {
             None => {
                 ui.centered_and_justified(|ui| {
                     ui.label(
-                        egui::RichText::new("Select an event to view details")
+                        egui::RichText::new("👆 Select an event to view details")
                             .color(theme::TEXT_DIM),
                     );
                 });
@@ -28,20 +28,20 @@ impl EventSleuthApp {
             ui.selectable_value(
                 &mut self.detail_tab,
                 DetailTab::Details,
-                egui::RichText::new("Details").strong(),
+                egui::RichText::new("📝 Details").strong(),
             );
             ui.selectable_value(
                 &mut self.detail_tab,
                 DetailTab::Xml,
-                egui::RichText::new("XML").strong(),
+                egui::RichText::new("📄 XML").strong(),
             );
 
             // Copy buttons on the right
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button("Copy XML").clicked() {
+                if ui.small_button("📋 Copy XML").clicked() {
                     ui.ctx().copy_text(event.raw_xml.clone());
                 }
-                if ui.small_button("Copy Message").clicked() {
+                if ui.small_button("📋 Copy Message").clicked() {
                     ui.ctx().copy_text(event.message.clone());
                 }
             });
@@ -116,7 +116,7 @@ impl EventSleuthApp {
         ui.add_space(8.0);
 
         // ── Message ─────────────────────────────────────────────────
-        ui.label(egui::RichText::new("Message").color(theme::ACCENT).strong());
+        ui.label(egui::RichText::new("💬 Message").color(theme::ACCENT).strong());
         ui.separator();
 
         let msg = event.display_message();
@@ -127,14 +127,19 @@ impl EventSleuthApp {
                     .italics(),
             );
         } else {
-            ui.label(msg);
+            // Format the message with word-wrap and readable styling
+            ui.label(
+                egui::RichText::new(msg)
+                    .color(theme::TEXT_PRIMARY)
+                    .size(13.0),
+            );
         }
 
         // ── Event Data table ────────────────────────────────────────
         if !event.event_data.is_empty() {
             ui.add_space(8.0);
             ui.label(
-                egui::RichText::new("Event Data")
+                egui::RichText::new("📊 Event Data")
                     .color(theme::ACCENT)
                     .strong(),
             );
