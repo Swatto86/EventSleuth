@@ -80,6 +80,11 @@ pub fn level_color(level: u8) -> Color32 {
 ///
 /// Should be called once during initialisation (in `App::new`).
 pub fn apply_theme(ctx: &egui::Context) {
+    apply_dark_theme(ctx);
+}
+
+/// Apply the EventSleuth dark theme.
+pub fn apply_dark_theme(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();
 
     // Background tones
@@ -114,6 +119,46 @@ pub fn apply_theme(ctx: &egui::Context) {
     // Window appearance
     visuals.window_shadow = egui::Shadow::NONE;
     visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(50, 50, 70));
+
+    ctx.set_visuals(visuals);
+}
+
+/// Apply the EventSleuth light theme.
+pub fn apply_light_theme(ctx: &egui::Context) {
+    let mut visuals = egui::Visuals::light();
+
+    // Background tones — light palette
+    visuals.panel_fill = Color32::from_rgb(245, 245, 248);
+    visuals.window_fill = Color32::from_rgb(250, 250, 252);
+    visuals.extreme_bg_color = Color32::WHITE;
+    visuals.faint_bg_color = Color32::from_rgb(238, 238, 242);
+
+    // Text
+    visuals.override_text_color = Some(Color32::from_rgb(40, 40, 50));
+
+    // Widget resting state
+    visuals.widgets.inactive.bg_fill = Color32::from_rgb(225, 225, 232);
+    visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(80, 80, 100));
+    visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(230, 230, 236);
+
+    // Widget hover state
+    visuals.widgets.hovered.bg_fill = Color32::from_rgb(210, 210, 220);
+    visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(40, 40, 50));
+
+    // Widget active state
+    visuals.widgets.active.bg_fill = Color32::from_rgb(195, 195, 210);
+
+    // Non-interactive backgrounds
+    visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(240, 240, 244);
+    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(100, 100, 120));
+
+    // Selection
+    visuals.selection.bg_fill = Color32::from_rgb(180, 215, 235);
+    visuals.selection.stroke = egui::Stroke::new(1.0, Color32::from_rgb(40, 160, 180));
+
+    // Window appearance
+    visuals.window_shadow = egui::Shadow::NONE;
+    visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(200, 200, 210));
 
     ctx.set_visuals(visuals);
 }

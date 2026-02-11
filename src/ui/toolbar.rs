@@ -60,7 +60,7 @@ impl EventSleuthApp {
                 }
             });
 
-            // ── Right-aligned app title + about ───────────────────────
+            // ── Right-aligned app title + about + theme toggle ─────────
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let about_btn = ui.add(
                     egui::Button::new(
@@ -74,6 +74,28 @@ impl EventSleuthApp {
                 {
                     self.show_about = true;
                 }
+
+                // Theme toggle
+                let theme_icon = if self.dark_mode { "☀" } else { "🌙" };
+                let theme_tooltip = if self.dark_mode { "Switch to light mode" } else { "Switch to dark mode" };
+                let theme_btn = ui.add(
+                    egui::Button::new(
+                        egui::RichText::new(theme_icon).size(14.0)
+                    )
+                    .min_size(egui::vec2(22.0, 22.0)),
+                );
+                if theme_btn
+                    .on_hover_text(theme_tooltip)
+                    .clicked()
+                {
+                    self.dark_mode = !self.dark_mode;
+                    if self.dark_mode {
+                        theme::apply_dark_theme(ui.ctx());
+                    } else {
+                        theme::apply_light_theme(ui.ctx());
+                    }
+                }
+
                 ui.label(
                     egui::RichText::new("🔍 EventSleuth")
                         .color(theme::ACCENT)
