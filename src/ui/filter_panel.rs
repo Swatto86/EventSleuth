@@ -27,7 +27,7 @@ impl EventSleuthApp {
 
         // ── Severity levels ─────────────────────────────────────────
         ui.label("📊 Level");
-        let level_names = ["LogAlways", "🔴 Critical", "🟠 Error", "🟡 Warning", "🔵 Info", "⚪ Verbose"];
+        let level_names = ["⚙️ LogAlways", "🔴 Critical", "🟠 Error", "🟡 Warning", "🔵 Info", "⚪ Verbose"];
         let level_colors = [
             theme::LEVEL_DEFAULT,
             theme::LEVEL_CRITICAL,
@@ -36,7 +36,7 @@ impl EventSleuthApp {
             theme::LEVEL_INFO,
             theme::LEVEL_VERBOSE,
         ];
-        for i in 1..=5 {
+        for i in 0..=5 {
             let label = egui::RichText::new(level_names[i]).color(level_colors[i]);
             if ui.checkbox(&mut self.filter.levels[i], label).changed() {
                 changed = true;

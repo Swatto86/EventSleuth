@@ -101,6 +101,10 @@ pub struct EventSleuthApp {
     // ── Dialogs ─────────────────────────────────────────────────
     /// Whether the About dialog is open.
     pub show_about: bool,
+
+    // ── Theme ───────────────────────────────────────────────────
+    /// `true` = dark mode (default), `false` = light mode.
+    pub dark_mode: bool,
 }
 
 // ── Construction ────────────────────────────────────────────────────────
@@ -159,6 +163,8 @@ impl EventSleuthApp {
             detail_tab: DetailTab::Details,
 
             show_about: false,
+
+            dark_mode: true,
         };
 
         // Auto-start loading default channels
