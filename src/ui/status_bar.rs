@@ -34,13 +34,28 @@ impl EventSleuthApp {
             // ── Loading status ──────────────────────────────────────
             if self.is_loading {
                 ui.spinner();
-                let progress = format!(
-                    "⏳ Loading… {} events ({})",
-                    self.progress_count, self.progress_channel
-                );
+                let progress = if self.is_tail_query {
+                    "Checking for new events...".to_string()
+                } else {
+                    format!(
+                        "Loading... {} events ({})",
+                        self.progress_count, self.progress_channel
+                    )
+                };
                 ui.label(egui::RichText::new(progress).color(theme::TEXT_SECONDARY));
+            } else if let Some((ref msg, _)) = self.export_message {
+                // Show export feedback briefly
+                ui.label(egui::RichText::new(msg.as_str()).color(theme::ACCENT));
+            } else if self.live_tail {
+                let since = self.last_tail_time
+                    .map(|t| format!("{}s ago", t.elapsed().as_secs()))
+                    .unwrap_or_else(|| "starting".into());
+                ui.label(
+                    egui::RichText::new(format!("Live tail active (last check: {since})"))
+                        .color(theme::ACCENT),
+                );
             } else {
-                ui.label(egui::RichText::new("✅ Ready").color(theme::ACCENT_DIM));
+                ui.label(egui::RichText::new("Ready").color(theme::ACCENT_DIM));
             }
 
             // ── Errors indicator ────────────────────────────────────────

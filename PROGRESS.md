@@ -1,6 +1,6 @@
 # EventSleuth — Progress Tracker
 
-> Last updated: 2026-02-10
+> Last updated: 2026-02-23
 
 ## Build Status
 
@@ -10,6 +10,7 @@
 - **App launches:** ✅ GUI window opens, events load from Application/System sources
 - **CI/CD:** ✅ GitHub Actions workflow for automated release builds
 - **Single instance:** ✅ Named mutex prevents duplicate instances
+- **Clippy:** ✅ Zero warnings on application code
 
 ---
 
@@ -45,7 +46,20 @@ Tracking against [EventSleuth-Specification.md](EventSleuth-Specification.md).
 | 22 | Tooltips on all filter inputs | ✅ Done | Hover text with usage examples on every text field |
 | 23 | Single-instance enforcement | ✅ Done | Named mutex (`Global\EventSleuth_SingleInstance`) with MessageBox notification |
 | 24 | No console window in release | ✅ Done | `#![windows_subsystem = "windows"]` in release builds |
-| 25 | GitHub URL in About dialog | ✅ Done | Clickable hyperlink to repository |
+| 25 | GitHub URL in About dialog | Done | Clickable hyperlink to repository |
+| 26 | Keyboard shortcuts (F5, Esc, arrows) | Done | F5=refresh, Esc=close dialogs, Up/Down=navigate events |
+| 27 | Export success/failure feedback | Done | Toast message in status bar for 4 seconds after export |
+| 28 | "Today" time preset | Done | Filter from midnight local time today |
+| 29 | Zero clippy warnings on app code | Done | All 5 prior warnings resolved |
+| 30 | Safe UTF-8 truncation | Done | Char-safe slicing in table and detail panel |
+| 31 | Filter debouncing (~150ms) | Done | Text fields debounced via `Instant` timer; checkboxes/buttons instant |
+| 32 | .evtx file import | Done | Open .evtx files via `EvtQueryFilePath` flag; toolbar "Open .evtx" button |
+| 33 | Search match highlighting | Done | Detail panel message, event data, and XML view highlight search matches via `LayoutJob` |
+| 34 | Window size/position persistence | Done | eframe `persistence` feature saves window geometry between sessions |
+| 35 | User preference persistence | Done | Dark/light mode and selected channels restored on startup |
+| 36 | Saved filter presets | Done | Named presets saved/loaded/deleted via eframe storage; UI in filter panel |
+| 37 | Live tail / auto-refresh | Done | Toggle in toolbar; polls every 5s for new events, appends without clearing |
+| 38 | Security log elevation banner | Done | Prominent warning banner above event table when Security access is denied |
 
 ### UI Layout
 
@@ -98,6 +112,7 @@ EventSleuth/
 ├── src/
 │   ├── main.rs                         ✅  (entry point, single-instance check, tracing init, eframe launch)
 │   ├── app.rs                          ✅  (App state, eframe::App impl, message processing)
+│   ├── app_actions.rs                  ✅  (Export actions, keyboard shortcuts, About dialog)
 │   ├── core/
 │   │   ├── mod.rs                      ✅
 │   │   ├── event_record.rs             ✅  (EventRecord struct)
@@ -130,6 +145,19 @@ EventSleuth/
 
 | Change | Description |
 |--------|-------------|
+| Keyboard shortcuts | F5 refreshes, Escape closes dialogs/clears selection, Up/Down navigates event list |
+| Export feedback | Export success/failure shown in status bar for 4 seconds with event count |
+| "Today" time preset | New quick-preset button filters from midnight local time today |
+| Clippy clean | Resolved all 5 clippy warnings (unnecessary casts, sort_by) |
+| Safe UTF-8 truncation | Fixed potential panics on multi-byte chars in table message and detail panel value truncation |
+| File size compliance | Split `app.rs` (was 530 lines) into `app.rs` (383) + `app_actions.rs` (183) |
+| Filter debouncing | Text fields debounce at ~150ms before triggering re-filter; checkboxes/buttons remain instant |
+| .evtx file import | Open exported `.evtx` files via toolbar button; reads using `EvtQueryFilePath` flag |
+| Search match highlighting | Detail panel highlights search matches in message, event data values, and XML with `LayoutJob` |
+| Window persistence | Window size, position, dark/light mode, and selected channels restored between sessions |
+| Saved filter presets | Named filter presets saved/loaded/deleted via Presets menu in filter panel |
+| Live tail / auto-refresh | Toolbar toggle polls for new events every 5s and appends without clearing existing data |
+| Security elevation banner | Prominent warning banner above event table when Security log access is denied |
 | Sources terminology | Renamed all user-facing "Channels" references to "Sources" for clarity. |
 | Single-instance enforcement | Uses a Windows named mutex to prevent multiple instances. Shows a MessageBox if already running. |
 | Emoji UI polish | Added contextual emoji throughout: toolbar buttons, filter labels, status bar, detail panel tabs, About dialog. |
@@ -150,11 +178,8 @@ These are **not** blockers — the app is functional. Listed for future improvem
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| Filter debouncing (~150ms) | Low | Currently requires Apply button; no per-keystroke filtering |
-| Text search match highlighting in detail panel | Low | Search works but matching text isn't highlighted |
-| Date/time picker widget | Low | Uses text input instead of `egui_extras::DatePickerButton` |
+| Date/time picker widget | Low | Uses text input instead of `egui_extras::DatePickerButton` (incompatible with eframe persistence) |
 | Column resizing persistence | Low | Column widths reset on restart |
-| Security log elevation prompt/UX | Low | Shows error in status bar; could add a more prominent banner |
 
 ---
 
@@ -164,19 +189,13 @@ Ideas for future development, roughly prioritised:
 
 | Enhancement | Priority | Description |
 |-------------|----------|-------------|
-| Live tail / auto-refresh | Medium | Periodically poll for new events and append to the table, like `tail -f`. |
-| `.evtx` file import | Medium | Load events from exported `.evtx` files (`EvtQueryFilePath` flag). |
-| Saved filter presets | Medium | Serialize `FilterState` to JSON and let users save/load named presets. |
 | Remote computer querying | Medium | Query event logs on remote machines via `EvtQuery` session handles. |
 | Regex text search | Low | Toggle between substring and regex matching in the search box. |
-| Search match highlighting | Low | Highlight matching text in the detail panel message. |
 | Column customisation | Low | Show/hide/reorder table columns via a settings panel. |
-| Date/time picker widget | Low | Replace text input with `egui_extras::DatePickerButton`. |
 | Column width persistence | Low | Save/restore column widths between sessions. |
 | Event correlation by Activity ID | Low | Group related events by their Activity ID. |
 | Bookmarked/pinned events | Low | Let users pin important events for reference. |
 | Event statistics dashboard | Low | Show summary charts: events by level, top providers, events over time. |
-| Keyboard shortcuts | Low | Ctrl+F for search, F5 for refresh, Escape to close dialogs. |
 | Export filtered only | Low | Option to export only the currently filtered/visible events. |
 | Configurable max events | Low | Let users adjust the 500k per-source safety limit. |
 

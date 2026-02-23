@@ -12,7 +12,7 @@ use crossbeam_channel::Receiver;
 use crate::core::channel_enumerator;
 use crate::core::event_reader::{self, ReaderMessage};
 use crate::core::event_record::EventRecord;
-use crate::core::filter::FilterState;
+use crate::core::filter::{FilterPreset, FilterState};
 use crate::util::constants;
 
 // ── Enums ───────────────────────────────────────────────────────────────
@@ -105,6 +105,38 @@ pub struct EventSleuthApp {
     // ── Theme ───────────────────────────────────────────────────
     /// `true` = dark mode (default), `false` = light mode.
     pub dark_mode: bool,
+
+    // ── Export feedback ─────────────────────────────────────────
+    /// Receiver for export completion messages from background threads.
+    pub export_rx: Option<crossbeam_channel::Receiver<String>>,
+    /// Transient status message for export results (shown briefly).
+    pub export_message: Option<(String, std::time::Instant)>,
+
+    // ── Filter debounce ─────────────────────────────────────────
+    /// Timestamp of the last text-field change in the filter panel.
+    /// When set, the update loop waits [`constants::FILTER_DEBOUNCE_MS`]
+    /// before applying the filter.
+    pub debounce_timer: Option<std::time::Instant>,
+
+    // ── Filter presets ──────────────────────────────────────────
+    /// Saved named filter presets (persisted via eframe storage).
+    pub filter_presets: Vec<FilterPreset>,
+    /// Whether the "save preset" dialog is open.
+    pub show_save_preset: bool,
+    /// Text input for the new preset name.
+    pub preset_name_input: String,
+
+    // ── Live tail ───────────────────────────────────────────────
+    /// When `true`, the app periodically re-queries for new events.
+    pub live_tail: bool,
+    /// Timestamp of the last live-tail refresh.
+    pub last_tail_time: Option<std::time::Instant>,
+    /// Whether the current in-flight query is a tail append (vs full load).
+    pub is_tail_query: bool,
+
+    // ── .evtx file import ───────────────────────────────────────
+    /// Receiver for a file path selected by the user via the open dialog.
+    pub import_rx: Option<crossbeam_channel::Receiver<std::path::PathBuf>>,
 }
 
 // ── Construction ────────────────────────────────────────────────────────
@@ -153,7 +185,7 @@ impl EventSleuthApp {
             cancel_flag: None,
             is_loading: false,
 
-            status_text: "Starting…".into(),
+            status_text: "Starting...".into(),
             query_elapsed: None,
             progress_count: 0,
             progress_channel: String::new(),
@@ -165,7 +197,42 @@ impl EventSleuthApp {
             show_about: false,
 
             dark_mode: true,
+
+            export_rx: None,
+            export_message: None,
+
+            debounce_timer: None,
+
+            filter_presets: Vec::new(),
+            show_save_preset: false,
+            preset_name_input: String::new(),
+
+            live_tail: false,
+            last_tail_time: None,
+            is_tail_query: false,
+
+            import_rx: None,
         };
+
+        // ── Restore persisted preferences ──────────────────────────
+        if let Some(storage) = cc.storage {
+            if let Some(dark) = eframe::get_value::<bool>(storage, "dark_mode") {
+                app.dark_mode = dark;
+                if dark {
+                    crate::ui::theme::apply_dark_theme(&cc.egui_ctx);
+                } else {
+                    crate::ui::theme::apply_light_theme(&cc.egui_ctx);
+                }
+            }
+            if let Some(ch) = eframe::get_value::<Vec<String>>(storage, "selected_channels") {
+                if !ch.is_empty() {
+                    app.selected_channels = ch;
+                }
+            }
+            if let Some(presets) = eframe::get_value::<Vec<FilterPreset>>(storage, "filter_presets") {
+                app.filter_presets = presets;
+            }
+        }
 
         // Auto-start loading default channels
         app.start_loading();
@@ -291,14 +358,25 @@ impl EventSleuthApp {
                 }
                 ReaderMessage::Complete { total, elapsed } => {
                     self.is_loading = false;
-                    self.query_elapsed = Some(elapsed);
                     self.reader_rx = None;
                     self.cancel_flag = None;
-                    self.status_text = format!("Loaded {} events", total);
-                    tracing::info!("Load complete: {} events", total);
+                    if self.is_tail_query {
+                        // Tail query: only update status if new events arrived
+                        if total > 0 {
+                            self.status_text = format!("{} new events (live tail)", total);
+                            tracing::info!("Tail complete: {} new events", total);
+                        }
+                        self.is_tail_query = false;
+                    } else {
+                        self.query_elapsed = Some(elapsed);
+                        self.status_text = format!("Loaded {} events", total);
+                        tracing::info!("Load complete: {} events", total);
+                    }
                 }
                 ReaderMessage::Error { channel, error } => {
-                    self.errors.push((channel, error));
+                    if self.errors.len() < constants::MAX_ERRORS {
+                        self.errors.push((channel, error));
+                    }
                 }
             }
         }
@@ -361,57 +439,42 @@ impl EventSleuthApp {
         self.all_events.get(event_idx)
     }
 
-    /// Export currently filtered events to CSV via a native save dialog.
-    pub fn export_csv(&self) {
-        let events = self.filtered_event_list();
-        if events.is_empty() {
-            tracing::warn!("No events to export");
-            return;
-        }
-
-        std::thread::spawn(move || {
-            if let Some(path) = rfd::FileDialog::new()
-                .add_filter("CSV", &["csv"])
-                .set_file_name("EventSleuth_export.csv")
-                .save_file()
-            {
-                if let Err(e) = crate::export::csv_export::export_csv(&events, &path) {
-                    tracing::error!("CSV export failed: {}", e);
-                }
-            }
-        });
-    }
-
-    /// Export currently filtered events to JSON via a native save dialog.
-    pub fn export_json(&self) {
-        let events = self.filtered_event_list();
-        if events.is_empty() {
-            tracing::warn!("No events to export");
-            return;
-        }
-
-        std::thread::spawn(move || {
-            if let Some(path) = rfd::FileDialog::new()
-                .add_filter("JSON", &["json"])
-                .set_file_name("EventSleuth_export.json")
-                .save_file()
-            {
-                if let Err(e) = crate::export::json_export::export_json(&events, &path) {
-                    tracing::error!("JSON export failed: {}", e);
-                }
-            }
-        });
-    }
-
     /// Collect the filtered events into a cloned `Vec` for export.
     ///
     /// Cloning is necessary because export happens on a background thread
     /// (for the file dialog) and can't hold references to `self`.
-    fn filtered_event_list(&self) -> Vec<EventRecord> {
+    pub fn filtered_event_list(&self) -> Vec<EventRecord> {
         self.filtered_indices
             .iter()
             .filter_map(|&idx| self.all_events.get(idx).cloned())
             .collect()
+    }
+
+    /// Check whether any error from the Security channel indicates
+    /// an access-denied failure (requires elevation).
+    pub fn has_security_access_error(&self) -> bool {
+        self.errors.iter().any(|(ch, err)| {
+            ch == "Security"
+                && (err.contains("80070005")
+                    || err.contains("00000005")
+                    || err.to_lowercase().contains("access"))
+        })
+    }
+
+    /// Poll the import file-selection channel for a user-chosen .evtx path.
+    fn process_import_selection(&mut self) {
+        let path = {
+            let rx = match &self.import_rx {
+                Some(rx) => rx,
+                None => return,
+            };
+            match rx.try_recv() {
+                Ok(p) => p,
+                Err(_) => return,
+            }
+        };
+        self.import_rx = None;
+        self.start_loading_evtx(&path);
     }
 }
 
@@ -422,15 +485,50 @@ impl eframe::App for EventSleuthApp {
         // 1. Process messages from the reader thread
         self.process_messages();
 
-        // 2. Re-filter if needed
+        // 2. Process export completion messages
+        self.process_export_messages();
+
+        // 3. Process .evtx import file selection
+        self.process_import_selection();
+
+        // 4. Debounce: apply filter after FILTER_DEBOUNCE_MS of inactivity
+        if let Some(timer) = self.debounce_timer {
+            let debounce = std::time::Duration::from_millis(constants::FILTER_DEBOUNCE_MS);
+            if timer.elapsed() >= debounce {
+                self.filter.parse_event_ids();
+                self.filter.parse_time_range();
+                self.needs_refilter = true;
+                self.debounce_timer = None;
+            } else {
+                ctx.request_repaint_after(debounce);
+            }
+        }
+
+        // 5. Re-filter if needed
         if self.needs_refilter {
             self.apply_filter();
         }
 
-        // 3. Keep repainting while loading (to poll messages)
+        // 6. Keep repainting while loading (to poll messages)
         if self.is_loading {
             ctx.request_repaint();
         }
+
+        // 7. Live tail: periodic re-query for new events
+        if self.live_tail && !self.is_loading {
+            let should_tail = match self.last_tail_time {
+                Some(t) => t.elapsed() >= std::time::Duration::from_secs(constants::LIVE_TAIL_INTERVAL_SECS),
+                None => true,
+            };
+            if should_tail {
+                self.start_tail_query();
+                self.last_tail_time = Some(std::time::Instant::now());
+            }
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        }
+
+        // 8. Handle keyboard shortcuts
+        self.handle_keyboard_shortcuts(ctx);
 
         // ── Top toolbar ─────────────────────────────────────────────
         egui::TopBottomPanel::top("toolbar")
@@ -470,60 +568,40 @@ impl eframe::App for EventSleuthApp {
 
         // ── Central event table ─────────────────────────────────────
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Security elevation banner
+            if self.has_security_access_error() {
+                egui::Frame::new()
+                    .fill(egui::Color32::from_rgb(60, 40, 10))
+                    .inner_margin(egui::Margin::same(6))
+                    .corner_radius(4.0)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("⚠ Security log access denied.")
+                                    .color(crate::ui::theme::LEVEL_WARNING)
+                                    .strong(),
+                            );
+                            ui.label(
+                                egui::RichText::new("Run EventSleuth as Administrator to view Security events.")
+                                    .color(crate::ui::theme::TEXT_SECONDARY),
+                            );
+                        });
+                    });
+                ui.add_space(4.0);
+            }
             self.render_event_table(ui);
         });
 
         // ── Floating popups ─────────────────────────────────────────
         self.render_channel_selector(ctx);
         self.render_about_dialog(ctx);
+        self.render_save_preset_dialog(ctx);
     }
-}
 
-impl EventSleuthApp {
-    /// Render the About dialog window.
-    fn render_about_dialog(&mut self, ctx: &egui::Context) {
-        if !self.show_about {
-            return;
-        }
-
-        let mut open = true;
-        egui::Window::new("About")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .fixed_size([320.0, 0.0])
-            .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.add_space(8.0);
-                    ui.label(
-                        egui::RichText::new("🔍 EventSleuth")
-                            .color(crate::ui::theme::ACCENT)
-                            .strong()
-                            .size(20.0),
-                    );
-                    ui.label(
-                        egui::RichText::new(format!("v{}", crate::util::constants::APP_VERSION))
-                            .color(crate::ui::theme::TEXT_SECONDARY),
-                    );
-                    ui.add_space(8.0);
-                    ui.label("A fast, filterable Windows Event Log viewer");
-                    ui.add_space(12.0);
-                    ui.label(
-                        egui::RichText::new("👤 Developer: Swatto")
-                            .color(crate::ui::theme::TEXT_SECONDARY),
-                    );
-                    ui.add_space(4.0);
-                    ui.hyperlink_to(
-                        "🔗 github.com/Swatto86/EventSleuth",
-                        crate::util::constants::APP_GITHUB_URL,
-                    );
-                    ui.add_space(8.0);
-                });
-            });
-
-        if !open {
-            self.show_about = false;
-        }
+    /// Persist user preferences to eframe storage on shutdown.
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, "dark_mode", &self.dark_mode);
+        eframe::set_value(storage, "selected_channels", &self.selected_channels);
+        eframe::set_value(storage, "filter_presets", &self.filter_presets);
     }
 }

@@ -62,6 +62,12 @@ pub const ACCENT: Color32 = Color32::from_rgb(80, 200, 220);
 /// Dimmer accent for secondary highlights.
 pub const ACCENT_DIM: Color32 = Color32::from_rgb(60, 150, 170);
 
+/// Background colour for search-match highlighting.
+pub const HIGHLIGHT_BG: Color32 = Color32::from_rgba_premultiplied(200, 170, 0, 70);
+
+/// Text colour for search-match highlighted segments.
+pub const HIGHLIGHT_TEXT: Color32 = Color32::from_rgb(255, 220, 80);
+
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 /// Return the colour associated with a numeric severity level.

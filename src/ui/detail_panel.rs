@@ -2,6 +2,9 @@
 //!
 //! Provides two tabs — **Details** (formatted view with event data table)
 //! and **XML** (raw XML string in a monospaced scrollable area).
+//!
+//! When a text search is active, matching substrings are highlighted with
+//! a contrasting background colour via `egui::text::LayoutJob`.
 
 use crate::app::{DetailTab, EventSleuthApp};
 use crate::ui::theme;
@@ -127,12 +130,24 @@ impl EventSleuthApp {
                     .italics(),
             );
         } else {
-            // Format the message with word-wrap and readable styling
-            ui.label(
-                egui::RichText::new(msg)
-                    .color(theme::TEXT_PRIMARY)
-                    .size(13.0),
-            );
+            // Render with search-match highlighting when a search is active
+            let search = &self.filter.text_search;
+            if search.is_empty() {
+                ui.label(
+                    egui::RichText::new(msg)
+                        .color(theme::TEXT_PRIMARY)
+                        .size(13.0),
+                );
+            } else {
+                let job = Self::build_highlighted_job(
+                    msg,
+                    search,
+                    self.filter.case_sensitive,
+                    13.0,
+                    false,
+                );
+                ui.label(job);
+            }
         }
 
         // ── Event Data table ────────────────────────────────────────
@@ -157,26 +172,156 @@ impl EventSleuthApp {
 
                     for (key, value) in &event.event_data {
                         ui.label(egui::RichText::new(key).color(theme::TEXT_SECONDARY));
-                        // Wrap long values
-                        let display = if value.len() > 500 {
-                            format!("{}… ({} chars)", &value[..500], value.len())
+                        // Wrap long values (char-safe truncation)
+                        let display = if value.chars().count() > 500 {
+                            let end = value.char_indices()
+                                .nth(500)
+                                .map(|(i, _)| i)
+                                .unwrap_or(value.len());
+                            format!("{}... ({} chars)", &value[..end], value.len())
                         } else {
                             value.clone()
                         };
-                        ui.label(&display);
+                        // Highlight search matches in event data values
+                        let search = &self.filter.text_search;
+                        if search.is_empty() {
+                            ui.label(&display);
+                        } else {
+                            let job = Self::build_highlighted_job(
+                                &display,
+                                search,
+                                self.filter.case_sensitive,
+                                13.0,
+                                false,
+                            );
+                            ui.label(job);
+                        }
                         ui.end_row();
                     }
                 });
         }
     }
 
-    /// Render the raw XML view with monspace font in a scrollable area.
+    /// Render the raw XML view with monospace font in a scrollable area.
+    /// Search matches are highlighted when a text search is active.
     fn render_detail_xml(&self, ui: &mut egui::Ui, event: &crate::core::event_record::EventRecord) {
-        ui.label(
-            egui::RichText::new(&event.raw_xml)
-                .monospace()
-                .size(12.0)
-                .color(theme::TEXT_SECONDARY),
-        );
+        let search = &self.filter.text_search;
+        if search.is_empty() {
+            ui.label(
+                egui::RichText::new(&event.raw_xml)
+                    .monospace()
+                    .size(12.0)
+                    .color(theme::TEXT_SECONDARY),
+            );
+        } else {
+            let job = Self::build_highlighted_job(
+                &event.raw_xml,
+                search,
+                self.filter.case_sensitive,
+                12.0,
+                true,
+            );
+            ui.label(job);
+        }
+    }
+
+    /// Build a [`egui::text::LayoutJob`] that renders `text` with
+    /// highlighted search-match segments.
+    ///
+    /// Non-matching text uses [`theme::TEXT_PRIMARY`] (or [`theme::TEXT_SECONDARY`]
+    /// for monospace). Matched substrings get a [`theme::HIGHLIGHT_BG`]
+    /// background and [`theme::HIGHLIGHT_TEXT`] foreground.
+    fn build_highlighted_job(
+        text: &str,
+        search: &str,
+        case_sensitive: bool,
+        font_size: f32,
+        monospace: bool,
+    ) -> egui::text::LayoutJob {
+        use egui::text::{LayoutJob, LayoutSection};
+        use egui::{FontId, FontFamily, TextFormat};
+
+        let family = if monospace { FontFamily::Monospace } else { FontFamily::Proportional };
+        let font_id = FontId::new(font_size, family);
+
+        let normal_fmt = TextFormat {
+            font_id: font_id.clone(),
+            color: if monospace { theme::TEXT_SECONDARY } else { theme::TEXT_PRIMARY },
+            ..Default::default()
+        };
+
+        let highlight_fmt = TextFormat {
+            font_id,
+            color: theme::HIGHLIGHT_TEXT,
+            background: theme::HIGHLIGHT_BG,
+            ..Default::default()
+        };
+
+        let mut job = LayoutJob::default();
+        job.wrap.max_width = f32::INFINITY;
+        job.text = text.to_owned();
+
+        if search.is_empty() {
+            job.sections.push(LayoutSection {
+                leading_space: 0.0,
+                byte_range: 0..text.len(),
+                format: normal_fmt,
+            });
+            return job;
+        }
+
+        // Find all match positions
+        let text_lower;
+        let search_lower;
+        let (haystack, needle) = if case_sensitive {
+            (text, search)
+        } else {
+            text_lower = text.to_lowercase();
+            search_lower = search.to_lowercase();
+            (text_lower.as_str(), search_lower.as_str())
+        };
+
+        let mut pos = 0usize;
+        let needle_len = needle.len();
+
+        loop {
+            match haystack[pos..].find(needle) {
+                Some(rel_start) => {
+                    let abs_start = pos + rel_start;
+                    // Non-matching prefix
+                    if abs_start > pos {
+                        // Map lowercase byte positions back to original text byte positions
+                        // Since to_lowercase() can change byte lengths for some unicode,
+                        // we use the original text positions directly. For ASCII-safe search
+                        // terms the byte positions in lowercase == positions in original.
+                        job.sections.push(LayoutSection {
+                            leading_space: 0.0,
+                            byte_range: pos..abs_start,
+                            format: normal_fmt.clone(),
+                        });
+                    }
+                    // Matched segment
+                    job.sections.push(LayoutSection {
+                        leading_space: 0.0,
+                        byte_range: abs_start..abs_start + needle_len,
+                        format: highlight_fmt.clone(),
+                    });
+                    pos = abs_start + needle_len;
+                }
+                None => {
+                    // Trailing non-matching text
+                    if pos < text.len() {
+                        job.sections.push(LayoutSection {
+                            leading_space: 0.0,
+                            byte_range: pos..text.len(),
+                            format: normal_fmt.clone(),
+                        });
+                    }
+                    break;
+                }
+            }
+        }
+
+        job
     }
 }

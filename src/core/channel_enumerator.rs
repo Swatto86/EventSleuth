@@ -73,7 +73,7 @@ pub fn enumerate_channels() -> Result<Vec<String>, EventSleuthError> {
     }
 
     // Sort alphabetically for presentation
-    channels.sort_unstable_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    channels.sort_unstable_by_key(|a| a.to_lowercase());
 
     tracing::info!("Enumerated {} event log channels", channels.len());
     Ok(channels)

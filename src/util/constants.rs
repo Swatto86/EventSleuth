@@ -45,3 +45,17 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// GitHub repository URL.
 pub const APP_GITHUB_URL: &str = "https://github.com/Swatto86/EventSleuth";
+
+/// Debounce delay for text-based filter inputs (milliseconds).
+/// Prevents excessive re-filtering while the user is still typing.
+pub const FILTER_DEBOUNCE_MS: u64 = 150;
+
+/// Interval between live-tail refresh queries (seconds).
+pub const LIVE_TAIL_INTERVAL_SECS: u64 = 5;
+
+/// Maximum number of errors to retain in the error list.
+pub const MAX_ERRORS: usize = 200;
+
+/// HRESULT code for E_ACCESSDENIED from the Windows API.
+#[allow(dead_code)]
+pub const HRESULT_ACCESS_DENIED: u32 = 0x80070005;
