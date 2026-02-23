@@ -1385,7 +1385,6 @@ dependencies = [
  "egui",
  "egui_extras",
  "image",
- "raw-window-handle",
  "rfd",
  "roxmltree",
  "serde",

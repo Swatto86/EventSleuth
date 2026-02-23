@@ -8,9 +8,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crossbeam_channel::Receiver;
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE, SW_SHOW};
 
 use crate::core::channel_enumerator;
 use crate::core::event_reader::{self, ReaderMessage};
@@ -140,16 +137,6 @@ pub struct EventSleuthApp {
     // ── .evtx file import ───────────────────────────────────────
     /// Receiver for a file path selected by the user via the open dialog.
     pub import_rx: Option<crossbeam_channel::Receiver<std::path::PathBuf>>,
-
-    // ── Startup ─────────────────────────────────────────────────
-    /// Counts rendered frames at startup. The window starts hidden via
-    /// Win32 `ShowWindow(SW_HIDE)` and is made visible only after
-    /// enough frames have been painted so the GPU framebuffer contains
-    /// the themed content, eliminating the white flash.
-    pub startup_frames: u8,
-
-    /// Cached native window handle for startup visibility control.
-    pub hwnd: Option<HWND>,
 }
 
 // ── Construction ────────────────────────────────────────────────────────
@@ -160,17 +147,6 @@ impl EventSleuthApp {
     /// Enumerates available log channels (synchronous — typically fast)
     /// and auto-starts loading the default channels.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Extract the native HWND and force the window hidden via Win32
-        // *before* any rendering occurs. This overrides any persisted
-        // visibility state that eframe may have restored.
-        let hwnd = cc.window_handle().ok().and_then(|wh| match wh.as_raw() {
-            RawWindowHandle::Win32(h) => Some(HWND(h.hwnd.get() as *mut std::ffi::c_void)),
-            _ => None,
-        });
-        if let Some(h) = hwnd {
-            unsafe { let _ = ShowWindow(h, SW_HIDE); }
-        }
-
         crate::ui::theme::apply_theme(&cc.egui_ctx);
         Self::install_system_fonts(&cc.egui_ctx);
 
@@ -236,9 +212,6 @@ impl EventSleuthApp {
             is_tail_query: false,
 
             import_rx: None,
-
-            startup_frames: 0,
-            hwnd,
         };
 
         // ── Restore persisted preferences ──────────────────────────
@@ -509,23 +482,6 @@ impl EventSleuthApp {
 
 impl eframe::App for EventSleuthApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // 0. Keep the window hidden for the first few frames so the GPU
-        //    framebuffer is fully painted with the themed background before
-        //    the window becomes visible, preventing the white flash.
-        if self.startup_frames < 3 {
-            self.startup_frames += 1;
-            if self.startup_frames == 3 {
-                // Use Win32 ShowWindow for reliable visibility control;
-                // it cannot be overridden by persist_window or the renderer.
-                if let Some(h) = self.hwnd {
-                    unsafe { let _ = ShowWindow(h, SW_SHOW); }
-                } else {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                }
-            }
-            ctx.request_repaint();
-        }
-
         // 1. Process messages from the reader thread
         self.process_messages();
 
@@ -615,19 +571,19 @@ impl eframe::App for EventSleuthApp {
             // Security elevation banner
             if self.has_security_access_error() {
                 egui::Frame::new()
-                    .fill(egui::Color32::from_rgb(60, 40, 10))
+                    .fill(crate::ui::theme::security_banner_bg(self.dark_mode))
                     .inner_margin(egui::Margin::same(6))
                     .corner_radius(4.0)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.label(
                                 egui::RichText::new("⚠ Security log access denied.")
-                                    .color(crate::ui::theme::LEVEL_WARNING)
+                                    .color(crate::ui::theme::level_color(3, self.dark_mode))
                                     .strong(),
                             );
                             ui.label(
                                 egui::RichText::new("Run EventSleuth as Administrator to view Security events.")
-                                    .color(crate::ui::theme::TEXT_SECONDARY),
+                                    .color(crate::ui::theme::text_secondary(self.dark_mode)),
                             );
                         });
                     });
@@ -644,11 +600,14 @@ impl eframe::App for EventSleuthApp {
 
     /// Return the clear colour used before each frame render.
     ///
-    /// Matches the dark-theme background so the very first GPU clear
-    /// is dark, eliminating any flash between context creation and the
-    /// first fully-painted egui frame.
+    /// Matches the themed background so the GPU clear is the same
+    /// colour as the app background, eliminating any flash.
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        crate::ui::theme::BG_DARK.to_normalized_gamma_f32()
+        if self.dark_mode {
+            crate::ui::theme::BG_DARK.to_normalized_gamma_f32()
+        } else {
+            crate::ui::theme::BG_LIGHT.to_normalized_gamma_f32()
+        }
     }
 
     /// Persist user preferences to eframe storage on shutdown.

@@ -31,7 +31,6 @@ rfd = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 image = "0.25"
-raw-window-handle = "0.6"
 
 [build-dependencies]
 winresource = "0.1"

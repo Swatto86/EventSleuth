@@ -19,7 +19,7 @@ impl EventSleuthApp {
                 ui.centered_and_justified(|ui| {
                     ui.label(
                         egui::RichText::new("👆 Select an event to view details")
-                            .color(theme::TEXT_DIM),
+                            .color(theme::text_dim(self.dark_mode)),
                     );
                 });
                 return;
@@ -62,7 +62,8 @@ impl EventSleuthApp {
 
     /// Render the formatted details view: header fields, message, event data.
     fn render_detail_formatted(&self, ui: &mut egui::Ui, event: &crate::core::event_record::EventRecord) {
-        let level_color = theme::level_color(event.level);
+        let dark = self.dark_mode;
+        let level_color = theme::level_color(event.level, dark);
 
         // ── Header grid ─────────────────────────────────────────────
         egui::Grid::new("detail_header_grid")
@@ -71,43 +72,43 @@ impl EventSleuthApp {
             .spacing([20.0, 4.0])
             .show(ui, |ui| {
                 // Row 1
-                ui.label(egui::RichText::new("Event ID").color(theme::TEXT_DIM));
+                ui.label(egui::RichText::new("Event ID").color(theme::text_dim(dark)));
                 ui.label(event.event_id.to_string());
-                ui.label(egui::RichText::new("Level").color(theme::TEXT_DIM));
+                ui.label(egui::RichText::new("Level").color(theme::text_dim(dark)));
                 ui.label(egui::RichText::new(&event.level_name).color(level_color));
                 ui.end_row();
 
                 // Row 2
-                ui.label(egui::RichText::new("Provider").color(theme::TEXT_DIM));
+                ui.label(egui::RichText::new("Provider").color(theme::text_dim(dark)));
                 ui.label(&event.provider_name);
-                ui.label(egui::RichText::new("Channel").color(theme::TEXT_DIM));
+                ui.label(egui::RichText::new("Channel").color(theme::text_dim(dark)));
                 ui.label(&event.channel);
                 ui.end_row();
 
                 // Row 3
-                ui.label(egui::RichText::new("Timestamp").color(theme::TEXT_DIM));
+                ui.label(egui::RichText::new("Timestamp").color(theme::text_dim(dark)));
                 ui.label(format_detail_timestamp(&event.timestamp));
-                ui.label(egui::RichText::new("Computer").color(theme::TEXT_DIM));
+                ui.label(egui::RichText::new("Computer").color(theme::text_dim(dark)));
                 ui.label(&event.computer);
                 ui.end_row();
 
                 // Row 4
-                ui.label(egui::RichText::new("Process ID").color(theme::TEXT_DIM));
+                ui.label(egui::RichText::new("Process ID").color(theme::text_dim(dark)));
                 ui.label(event.process_id.to_string());
-                ui.label(egui::RichText::new("Thread ID").color(theme::TEXT_DIM));
+                ui.label(egui::RichText::new("Thread ID").color(theme::text_dim(dark)));
                 ui.label(event.thread_id.to_string());
                 ui.end_row();
 
                 // Row 5 (optional fields)
                 if let Some(ref sid) = event.user_sid {
-                    ui.label(egui::RichText::new("User SID").color(theme::TEXT_DIM));
+                    ui.label(egui::RichText::new("User SID").color(theme::text_dim(dark)));
                     ui.label(sid);
                 } else {
                     ui.label("");
                     ui.label("");
                 }
                 if let Some(ref aid) = event.activity_id {
-                    ui.label(egui::RichText::new("Activity ID").color(theme::TEXT_DIM));
+                    ui.label(egui::RichText::new("Activity ID").color(theme::text_dim(dark)));
                     ui.label(aid);
                 } else {
                     ui.label("");
@@ -119,14 +120,14 @@ impl EventSleuthApp {
         ui.add_space(8.0);
 
         // ── Message ─────────────────────────────────────────────────
-        ui.label(egui::RichText::new("💬 Message").color(theme::ACCENT).strong());
+        ui.label(egui::RichText::new("💬 Message").color(theme::accent(dark)).strong());
         ui.separator();
 
         let msg = event.display_message();
         if msg.is_empty() || msg == "(no message)" {
             ui.label(
                 egui::RichText::new("(no formatted message available)")
-                    .color(theme::TEXT_DIM)
+                    .color(theme::text_dim(dark))
                     .italics(),
             );
         } else {
@@ -135,7 +136,7 @@ impl EventSleuthApp {
             if search.is_empty() {
                 ui.label(
                     egui::RichText::new(msg)
-                        .color(theme::TEXT_PRIMARY)
+                        .color(theme::text_primary(dark))
                         .size(13.0),
                 );
             } else {
@@ -145,6 +146,7 @@ impl EventSleuthApp {
                     self.filter.case_sensitive,
                     13.0,
                     false,
+                    dark,
                 );
                 ui.label(job);
             }
@@ -155,7 +157,7 @@ impl EventSleuthApp {
             ui.add_space(8.0);
             ui.label(
                 egui::RichText::new("📊 Event Data")
-                    .color(theme::ACCENT)
+                    .color(theme::accent(dark))
                     .strong(),
             );
             ui.separator();
@@ -166,12 +168,12 @@ impl EventSleuthApp {
                 .spacing([12.0, 4.0])
                 .show(ui, |ui| {
                     // Header row
-                    ui.label(egui::RichText::new("Name").color(theme::TEXT_DIM).strong());
-                    ui.label(egui::RichText::new("Value").color(theme::TEXT_DIM).strong());
+                    ui.label(egui::RichText::new("Name").color(theme::text_dim(dark)).strong());
+                    ui.label(egui::RichText::new("Value").color(theme::text_dim(dark)).strong());
                     ui.end_row();
 
                     for (key, value) in &event.event_data {
-                        ui.label(egui::RichText::new(key).color(theme::TEXT_SECONDARY));
+                        ui.label(egui::RichText::new(key).color(theme::text_secondary(dark)));
                         // Wrap long values (char-safe truncation)
                         let display = if value.chars().count() > 500 {
                             let end = value.char_indices()
@@ -193,6 +195,7 @@ impl EventSleuthApp {
                                 self.filter.case_sensitive,
                                 13.0,
                                 false,
+                                dark,
                             );
                             ui.label(job);
                         }
@@ -205,13 +208,14 @@ impl EventSleuthApp {
     /// Render the raw XML view with monospace font in a scrollable area.
     /// Search matches are highlighted when a text search is active.
     fn render_detail_xml(&self, ui: &mut egui::Ui, event: &crate::core::event_record::EventRecord) {
+        let dark = self.dark_mode;
         let search = &self.filter.text_search;
         if search.is_empty() {
             ui.label(
                 egui::RichText::new(&event.raw_xml)
                     .monospace()
                     .size(12.0)
-                    .color(theme::TEXT_SECONDARY),
+                    .color(theme::text_secondary(dark)),
             );
         } else {
             let job = Self::build_highlighted_job(
@@ -220,6 +224,7 @@ impl EventSleuthApp {
                 self.filter.case_sensitive,
                 12.0,
                 true,
+                dark,
             );
             ui.label(job);
         }
@@ -228,15 +233,16 @@ impl EventSleuthApp {
     /// Build a [`egui::text::LayoutJob`] that renders `text` with
     /// highlighted search-match segments.
     ///
-    /// Non-matching text uses [`theme::TEXT_PRIMARY`] (or [`theme::TEXT_SECONDARY`]
-    /// for monospace). Matched substrings get a [`theme::HIGHLIGHT_BG`]
-    /// background and [`theme::HIGHLIGHT_TEXT`] foreground.
+    /// Non-matching text uses [`theme::text_primary`] (or [`theme::text_secondary`]
+    /// for monospace). Matched substrings get a [`theme::highlight_bg`]
+    /// background and [`theme::highlight_text`] foreground.
     fn build_highlighted_job(
         text: &str,
         search: &str,
         case_sensitive: bool,
         font_size: f32,
         monospace: bool,
+        dark: bool,
     ) -> egui::text::LayoutJob {
         use egui::text::{LayoutJob, LayoutSection};
         use egui::{FontId, FontFamily, TextFormat};
@@ -246,14 +252,14 @@ impl EventSleuthApp {
 
         let normal_fmt = TextFormat {
             font_id: font_id.clone(),
-            color: if monospace { theme::TEXT_SECONDARY } else { theme::TEXT_PRIMARY },
+            color: if monospace { theme::text_secondary(dark) } else { theme::text_primary(dark) },
             ..Default::default()
         };
 
         let highlight_fmt = TextFormat {
             font_id,
-            color: theme::HIGHLIGHT_TEXT,
-            background: theme::HIGHLIGHT_BG,
+            color: theme::highlight_text(dark),
+            background: theme::highlight_bg(dark),
             ..Default::default()
         };
 

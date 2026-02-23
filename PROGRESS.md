@@ -158,6 +158,7 @@ EventSleuth/
 | Saved filter presets | Named filter presets saved/loaded/deleted via Presets menu in filter panel |
 | Live tail / auto-refresh | Toolbar toggle polls for new events every 5s and appends without clearing existing data |
 | Security elevation banner | Prominent warning banner above event table when Security log access is denied |
+| Theme-matched clear colour | `clear_color()` override returns the active theme background colour instead of default white |
 | Sources terminology | Renamed all user-facing "Channels" references to "Sources" for clarity. |
 | Single-instance enforcement | Uses a Windows named mutex to prevent multiple instances. Shows a MessageBox if already running. |
 | Emoji UI polish | Added contextual emoji throughout: toolbar buttons, filter labels, status bar, detail panel tabs, About dialog. |
@@ -178,6 +179,7 @@ These are **not** blockers — the app is functional. Listed for future improvem
 
 | Item | Priority | Notes |
 |------|----------|-------|
+| Startup flash on launch | Low | Brief white flash during window creation; a known winit/Windows limitation with no reliable fix in eframe 0.31 |
 | Date/time picker widget | Low | Uses text input instead of `egui_extras::DatePickerButton` (incompatible with eframe persistence) |
 | Column resizing persistence | Low | Column widths reset on restart |
 
