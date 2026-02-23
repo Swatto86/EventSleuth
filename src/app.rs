@@ -8,6 +8,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crossbeam_channel::Receiver;
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use windows::Win32::Foundation::HWND;
+use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE, SW_SHOW};
 
 use crate::core::channel_enumerator;
 use crate::core::event_reader::{self, ReaderMessage};
@@ -139,10 +142,14 @@ pub struct EventSleuthApp {
     pub import_rx: Option<crossbeam_channel::Receiver<std::path::PathBuf>>,
 
     // ── Startup ─────────────────────────────────────────────────
-    /// `true` until the first frame has been rendered. Used to show
-    /// the window only after egui has painted the themed background,
-    /// preventing the white flash that otherwise appears on launch.
-    pub first_frame: bool,
+    /// Counts rendered frames at startup. The window starts hidden via
+    /// Win32 `ShowWindow(SW_HIDE)` and is made visible only after
+    /// enough frames have been painted so the GPU framebuffer contains
+    /// the themed content, eliminating the white flash.
+    pub startup_frames: u8,
+
+    /// Cached native window handle for startup visibility control.
+    pub hwnd: Option<HWND>,
 }
 
 // ── Construction ────────────────────────────────────────────────────────
@@ -153,6 +160,17 @@ impl EventSleuthApp {
     /// Enumerates available log channels (synchronous — typically fast)
     /// and auto-starts loading the default channels.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Extract the native HWND and force the window hidden via Win32
+        // *before* any rendering occurs. This overrides any persisted
+        // visibility state that eframe may have restored.
+        let hwnd = cc.window_handle().ok().and_then(|wh| match wh.as_raw() {
+            RawWindowHandle::Win32(h) => Some(HWND(h.hwnd.get() as *mut std::ffi::c_void)),
+            _ => None,
+        });
+        if let Some(h) = hwnd {
+            unsafe { let _ = ShowWindow(h, SW_HIDE); }
+        }
+
         crate::ui::theme::apply_theme(&cc.egui_ctx);
         Self::install_system_fonts(&cc.egui_ctx);
 
@@ -219,7 +237,8 @@ impl EventSleuthApp {
 
             import_rx: None,
 
-            first_frame: true,
+            startup_frames: 0,
+            hwnd,
         };
 
         // ── Restore persisted preferences ──────────────────────────
@@ -490,11 +509,21 @@ impl EventSleuthApp {
 
 impl eframe::App for EventSleuthApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // 0. Show the window on the first frame after the themed background
-        //    has been painted, preventing the white flash on startup.
-        if self.first_frame {
-            self.first_frame = false;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        // 0. Keep the window hidden for the first few frames so the GPU
+        //    framebuffer is fully painted with the themed background before
+        //    the window becomes visible, preventing the white flash.
+        if self.startup_frames < 3 {
+            self.startup_frames += 1;
+            if self.startup_frames == 3 {
+                // Use Win32 ShowWindow for reliable visibility control;
+                // it cannot be overridden by persist_window or the renderer.
+                if let Some(h) = self.hwnd {
+                    unsafe { let _ = ShowWindow(h, SW_SHOW); }
+                } else {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                }
+            }
+            ctx.request_repaint();
         }
 
         // 1. Process messages from the reader thread
@@ -611,6 +640,15 @@ impl eframe::App for EventSleuthApp {
         self.render_channel_selector(ctx);
         self.render_about_dialog(ctx);
         self.render_save_preset_dialog(ctx);
+    }
+
+    /// Return the clear colour used before each frame render.
+    ///
+    /// Matches the dark-theme background so the very first GPU clear
+    /// is dark, eliminating any flash between context creation and the
+    /// first fully-painted egui frame.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        crate::ui::theme::BG_DARK.to_normalized_gamma_f32()
     }
 
     /// Persist user preferences to eframe storage on shutdown.
