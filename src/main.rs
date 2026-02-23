@@ -104,7 +104,8 @@ fn main() -> eframe::Result<()> {
             constants::APP_VERSION
         ))
         .with_inner_size([1280.0, 800.0])
-        .with_min_inner_size([800.0, 500.0]);
+        .with_min_inner_size([800.0, 500.0])
+        .with_visible(false);
 
     if let Some(icon) = icon {
         viewport = viewport.with_icon(icon);

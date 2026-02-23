@@ -137,6 +137,12 @@ pub struct EventSleuthApp {
     // ── .evtx file import ───────────────────────────────────────
     /// Receiver for a file path selected by the user via the open dialog.
     pub import_rx: Option<crossbeam_channel::Receiver<std::path::PathBuf>>,
+
+    // ── Startup ─────────────────────────────────────────────────
+    /// `true` until the first frame has been rendered. Used to show
+    /// the window only after egui has painted the themed background,
+    /// preventing the white flash that otherwise appears on launch.
+    pub first_frame: bool,
 }
 
 // ── Construction ────────────────────────────────────────────────────────
@@ -212,6 +218,8 @@ impl EventSleuthApp {
             is_tail_query: false,
 
             import_rx: None,
+
+            first_frame: true,
         };
 
         // ── Restore persisted preferences ──────────────────────────
@@ -482,6 +490,13 @@ impl EventSleuthApp {
 
 impl eframe::App for EventSleuthApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // 0. Show the window on the first frame after the themed background
+        //    has been painted, preventing the white flash on startup.
+        if self.first_frame {
+            self.first_frame = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        }
+
         // 1. Process messages from the reader thread
         self.process_messages();
 
