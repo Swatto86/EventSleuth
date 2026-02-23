@@ -21,7 +21,7 @@
 | Layer | Technology | Notes |
 |---|---|---|
 | Language | Rust (stable) | Target `x86_64-pc-windows-msvc` |
-| UI Framework | `eframe` / `egui` | Immediate-mode GUI |
+| UI Framework | `eframe` / `egui` | Immediate-mode GUI, glow (OpenGL) backend |
 | Event Log API | `windows` crate (`Win32::System::EventLog`) | Use the **EvtQuery / EvtNext / EvtRender** family (modern Evt* API, NOT the legacy `OpenEventLog` API) |
 | XML Parsing | `quick-xml` or `roxmltree` | Parse the rendered event XML returned by `EvtRender` |
 | Async/Threading | `std::thread` + `crossbeam-channel` (or `std::sync::mpsc`) | Background reader thread communicates with UI via channels |

@@ -175,20 +175,20 @@ impl EventSleuthApp {
                     ui.add_space(8.0);
                     ui.label(
                         egui::RichText::new("EventSleuth")
-                            .color(crate::ui::theme::ACCENT)
+                            .color(crate::ui::theme::accent(self.dark_mode))
                             .strong()
                             .size(20.0),
                     );
                     ui.label(
                         egui::RichText::new(format!("v{}", crate::util::constants::APP_VERSION))
-                            .color(crate::ui::theme::TEXT_SECONDARY),
+                            .color(crate::ui::theme::text_secondary(self.dark_mode)),
                     );
                     ui.add_space(8.0);
                     ui.label("A fast, filterable Windows Event Log viewer");
                     ui.add_space(12.0);
                     ui.label(
                         egui::RichText::new("Developer: Swatto")
-                            .color(crate::ui::theme::TEXT_SECONDARY),
+                            .color(crate::ui::theme::text_secondary(self.dark_mode)),
                     );
                     ui.add_space(4.0);
                     ui.hyperlink_to(

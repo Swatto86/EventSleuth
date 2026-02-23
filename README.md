@@ -201,11 +201,18 @@ RUST_LOG=debug cargo run
 ```
 EventSleuth/
 ├── src/
-│   ├── main.rs           # Application entry point
-│   ├── ui/               # UI components
-│   ├── eventlog/         # Windows Event Log API wrappers
-│   ├── filters/          # Filtering logic
-│   └── export/           # Export functionality
+│   ├── main.rs           # Application entry point, single-instance guard
+│   ├── app.rs            # App state, eframe::App impl, DWM startup cloaking
+│   ├── app_actions.rs    # Export, keyboard shortcuts, About dialog
+│   ├── core/             # Event log API, parsing, filtering
+│   ├── ui/               # UI panel components and theme
+│   ├── export/           # CSV and JSON export
+│   └── util/             # Constants, error types, time helpers
+├── assets/
+│   ├── app.manifest      # UAC and DPI manifest
+│   └── icon.ico          # Auto-generated application icon
+├── build.rs              # Icon generation + Windows resource embedding
+├── update-application.ps1 # Automated version bump, tag, and release
 ├── Cargo.toml            # Dependencies
 └── README.md
 ```

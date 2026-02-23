@@ -12,7 +12,8 @@ impl EventSleuthApp {
     /// **debounced** (150 ms) so the filter is not recomputed on every
     /// keystroke. Checkbox / button changes are applied immediately.
     pub fn render_filter_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading(egui::RichText::new("🔍 Filters").color(theme::ACCENT));
+        let dark = self.dark_mode;
+        ui.heading(egui::RichText::new("🔍 Filters").color(theme::accent(dark)));
 
         // ── Preset controls (inline) ────────────────────────────────
         ui.horizontal(|ui| {
@@ -20,7 +21,7 @@ impl EventSleuthApp {
                 if self.filter_presets.is_empty() {
                     ui.label(
                         egui::RichText::new("No saved presets")
-                            .color(theme::TEXT_DIM)
+                            .color(theme::text_dim(dark))
                             .italics(),
                     );
                 } else {
@@ -77,14 +78,7 @@ impl EventSleuthApp {
         // ── Severity levels ─────────────────────────────────────────
         ui.label("📊 Level");
         let level_names = ["⚙️ LogAlways", "🔴 Critical", "🟠 Error", "🟡 Warning", "🔵 Info", "⚪ Verbose"];
-        let level_colors = [
-            theme::LEVEL_DEFAULT,
-            theme::LEVEL_CRITICAL,
-            theme::LEVEL_ERROR,
-            theme::LEVEL_WARNING,
-            theme::LEVEL_INFO,
-            theme::LEVEL_VERBOSE,
-        ];
+        let level_colors = theme::level_colors(dark);
         for i in 0..=5 {
             let label = egui::RichText::new(level_names[i]).color(level_colors[i]);
             if ui.checkbox(&mut self.filter.levels[i], label).changed() {
@@ -145,7 +139,7 @@ impl EventSleuthApp {
         ui.add_space(4.0);
 
         // ── Time presets ────────────────────────────────────────────
-        ui.label(egui::RichText::new("⚡ Quick presets").color(theme::TEXT_SECONDARY));
+        ui.label(egui::RichText::new("⚡ Quick presets").color(theme::text_secondary(dark)));
         ui.horizontal_wrapped(|ui| {
             if ui.small_button("1h").clicked() {
                 self.filter.apply_time_preset(1);
@@ -182,7 +176,7 @@ impl EventSleuthApp {
         // ── Apply / Clear buttons ───────────────────────────────────
         ui.horizontal(|ui| {
             if ui
-                .button(egui::RichText::new("✅ Apply").color(theme::ACCENT))
+                .button(egui::RichText::new("\u{2705} Apply").color(theme::accent(dark)))
                 .clicked()
             {
                 changed = true;
@@ -198,7 +192,7 @@ impl EventSleuthApp {
             ui.add_space(4.0);
             ui.label(
                 egui::RichText::new("🟢 Filters active")
-                    .color(theme::ACCENT)
+                    .color(theme::accent(dark))
                     .small(),
             );
         }

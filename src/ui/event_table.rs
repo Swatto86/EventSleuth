@@ -62,7 +62,8 @@ impl EventSleuthApp {
                     let event_idx = self.filtered_indices[visible_idx];
                     let event = &self.all_events[event_idx];
                     let is_selected = self.selected_event_idx == Some(visible_idx);
-                    let level_color = theme::level_color(event.level);
+                    let dark = self.dark_mode;
+                    let level_color = theme::level_color(event.level, dark);
 
                     // If selected, set the row colour
                     row.set_selected(is_selected);
@@ -71,7 +72,7 @@ impl EventSleuthApp {
                     row.col(|ui| {
                         ui.label(
                             egui::RichText::new(format_table_timestamp(&event.timestamp))
-                                .color(theme::TEXT_SECONDARY)
+                                .color(theme::text_secondary(dark))
                                 .small(),
                         );
                     });
@@ -90,7 +91,7 @@ impl EventSleuthApp {
                     row.col(|ui| {
                         ui.label(
                             egui::RichText::new(&event.provider_name)
-                                .color(theme::TEXT_SECONDARY),
+                                .color(theme::text_secondary(dark)),
                         );
                     });
 
@@ -131,10 +132,11 @@ impl EventSleuthApp {
         };
 
         let text = format!("{label}{arrow}");
+        let dark = self.dark_mode;
         let rich = if is_current {
-            egui::RichText::new(text).color(theme::ACCENT).strong()
+            egui::RichText::new(text).color(theme::accent(dark)).strong()
         } else {
-            egui::RichText::new(text).color(theme::TEXT_PRIMARY)
+            egui::RichText::new(text).color(theme::text_primary(dark))
         };
 
         if ui.button(rich).clicked() {

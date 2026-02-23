@@ -123,7 +123,7 @@ impl EventSleuthApp {
 
                 ui.label(
                     egui::RichText::new("🔍 EventSleuth")
-                        .color(theme::ACCENT)
+                        .color(theme::accent(self.dark_mode))
                         .strong()
                         .size(16.0),
                 );
