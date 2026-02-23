@@ -69,14 +69,14 @@ pub fn accent_dim(dark: bool) -> Color32 {
 
 /// Background colour for search-match highlighting.
 pub fn highlight_bg(dark: bool) -> Color32 {
-    if dark { Color32::from_rgba_premultiplied(200, 170, 0, 70) }
-    else { Color32::from_rgba_premultiplied(255, 210, 0, 110) }
+    if dark { Color32::from_rgb(120, 90, 0) }
+    else { Color32::from_rgb(255, 225, 80) }
 }
 
 /// Text colour for search-match highlighted segments.
 pub fn highlight_text(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(255, 220, 80) }
-    else { Color32::from_rgb(110, 65, 0) }
+    if dark { Color32::from_rgb(255, 255, 255) }
+    else { Color32::from_rgb(30, 20, 0) }
 }
 
 /// Security-banner background fill.
