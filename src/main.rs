@@ -8,6 +8,7 @@
 
 // Declare crate modules
 mod app;
+mod app_actions;
 mod core;
 mod export;
 mod ui;
@@ -111,6 +112,7 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport,
+        persist_window: true,
         ..Default::default()
     };
 

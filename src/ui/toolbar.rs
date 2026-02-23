@@ -50,15 +50,40 @@ impl EventSleuthApp {
 
             // ── Export dropdown ──────────────────────────────────────
             ui.menu_button("📤 Export", |ui| {
-                if ui.button("📄 Export to CSV…").clicked() {
+                if ui.button("📄 Export to CSV...").clicked() {
                     self.export_csv();
                     ui.close_menu();
                 }
-                if ui.button("📋 Export to JSON…").clicked() {
+                if ui.button("📋 Export to JSON...").clicked() {
                     self.export_json();
                     ui.close_menu();
                 }
             });
+
+            ui.separator();
+
+            // ── Import .evtx ────────────────────────────────────────
+            if ui
+                .button("📂 Open .evtx")
+                .on_hover_text("Import events from a local .evtx file")
+                .clicked()
+            {
+                self.import_evtx();
+            }
+
+            ui.separator();
+
+            // ── Live tail toggle ────────────────────────────────────
+            let tail_label = if self.live_tail { "⏸ Pause Tail" } else { "▶ Live Tail" };
+            let tail_btn = ui
+                .selectable_label(self.live_tail, tail_label)
+                .on_hover_text("Auto-refresh every 5 seconds to show new events");
+            if tail_btn.clicked() {
+                self.live_tail = !self.live_tail;
+                if self.live_tail {
+                    self.last_tail_time = None; // trigger an immediate query
+                }
+            }
 
             // ── Right-aligned app title + about + theme toggle ─────────
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

@@ -14,8 +14,8 @@ use crossbeam_channel::Sender;
 use windows::core::PCWSTR;
 use windows::Win32::System::EventLog::{
     EvtClose, EvtFormatMessage, EvtNext, EvtOpenPublisherMetadata, EvtQuery, EvtRender,
-    EvtFormatMessageEvent, EvtQueryChannelPath, EvtQueryReverseDirection, EvtRenderEventXml,
-    EVT_HANDLE,
+    EvtFormatMessageEvent, EvtQueryChannelPath, EvtQueryFilePath, EvtQueryReverseDirection,
+    EvtRenderEventXml, EVT_HANDLE,
 };
 
 use crate::core::event_record::EventRecord;
@@ -65,6 +65,25 @@ pub fn spawn_reader_thread(
         .expect("Failed to spawn event reader thread")
 }
 
+/// Spawn a background thread that reads events from a local `.evtx` file.
+///
+/// Uses `EvtQueryFilePath` instead of `EvtQueryChannelPath` so that the
+/// Evt* API reads directly from a file on disk rather than a live channel.
+pub fn spawn_file_reader_thread(
+    file_path: std::path::PathBuf,
+    time_from: Option<chrono::DateTime<chrono::Utc>>,
+    time_to: Option<chrono::DateTime<chrono::Utc>>,
+    sender: Sender<ReaderMessage>,
+    cancel: Arc<AtomicBool>,
+) -> std::thread::JoinHandle<()> {
+    std::thread::Builder::new()
+        .name("evtx-reader".into())
+        .spawn(move || {
+            file_reader_thread_main(file_path, time_from, time_to, sender, cancel);
+        })
+        .expect("Failed to spawn .evtx file reader thread")
+}
+
 /// Main loop of the reader thread. Iterates over channels, reads events,
 /// and sends results to the UI.
 fn reader_thread_main(
@@ -86,8 +105,10 @@ fn reader_thread_main(
             break;
         }
 
+        let flags = EvtQueryChannelPath.0 | EvtQueryReverseDirection.0;
         match read_channel(
             channel,
+            flags,
             time_from,
             time_to,
             &sender,
@@ -133,11 +154,64 @@ fn reader_thread_main(
     let _ = sender.send(ReaderMessage::Complete { total, elapsed });
 }
 
+/// Main loop for reading events from a local `.evtx` file.
+fn file_reader_thread_main(
+    file_path: std::path::PathBuf,
+    time_from: Option<chrono::DateTime<chrono::Utc>>,
+    time_to: Option<chrono::DateTime<chrono::Utc>>,
+    sender: Sender<ReaderMessage>,
+    cancel: Arc<AtomicBool>,
+) {
+    let start = Instant::now();
+    let mut publisher_cache: HashMap<String, EVT_HANDLE> = HashMap::new();
+
+    let display_name = file_path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "evtx".into());
+
+    let path_str = file_path.to_string_lossy().into_owned();
+    let flags = EvtQueryFilePath.0 | EvtQueryReverseDirection.0;
+
+    let total = match read_channel(&path_str, flags, time_from, time_to, &sender, &cancel, &mut publisher_cache) {
+        Ok(count) => {
+            let _ = sender.send(ReaderMessage::Progress {
+                count,
+                channel: display_name.clone(),
+            });
+            count
+        }
+        Err(e) => {
+            tracing::warn!("Error reading file '{}': {}", display_name, e);
+            let _ = sender.send(ReaderMessage::Error {
+                channel: display_name.clone(),
+                error: e.to_string(),
+            });
+            0
+        }
+    };
+
+    // Close cached publisher handles
+    for (name, handle) in publisher_cache.drain() {
+        if handle.0 != 0 {
+            unsafe { let _ = EvtClose(handle); }
+            tracing::trace!("Closed publisher metadata for '{}'", name);
+        }
+    }
+
+    let elapsed = start.elapsed();
+    tracing::info!("File reader complete: {} events from '{}' in {:.2}s", total, display_name, elapsed.as_secs_f64());
+    let _ = sender.send(ReaderMessage::Complete { total, elapsed });
+}
+
 /// Read all events from a single channel and send them in batches.
 ///
 /// Returns the number of events successfully read from this channel.
+/// The `query_flags` parameter controls whether this is a live channel
+/// query (`EvtQueryChannelPath`) or a file query (`EvtQueryFilePath`).
 fn read_channel(
     channel: &str,
+    query_flags: u32,
     time_from: Option<chrono::DateTime<chrono::Utc>>,
     time_to: Option<chrono::DateTime<chrono::Utc>>,
     sender: &Sender<ReaderMessage>,
@@ -151,14 +225,13 @@ fn read_channel(
     tracing::debug!("Querying channel '{}' with XPath: {}", channel, xpath);
 
     // SAFETY: We pass properly null-terminated UTF-16 strings. The session
-    // handle is None (local machine). Flags request channel-path mode with
-    // reverse (newest-first) ordering.
+    // handle is None (local machine). Flags are provided by the caller.
     let query_handle = unsafe {
         EvtQuery(
             None,
             PCWSTR(channel_wide.as_ptr()),
             PCWSTR(xpath_wide.as_ptr()),
-            EvtQueryChannelPath.0 | EvtQueryReverseDirection.0,
+            query_flags,
         )
     }
     .map_err(|e| EventSleuthError::WindowsApi {
@@ -282,7 +355,7 @@ fn render_event_xml(event_handle: isize) -> Result<String, EventSleuthError> {
         EvtRender(
             None,
             EVT_HANDLE(event_handle),
-            EvtRenderEventXml.0 as u32,
+            EvtRenderEventXml.0,
             (buffer.len() * 2) as u32,
             Some(buffer.as_mut_ptr() as *mut _),
             &mut buffer_used,
@@ -301,7 +374,7 @@ fn render_event_xml(event_handle: isize) -> Result<String, EventSleuthError> {
                 EvtRender(
                     None,
                     EVT_HANDLE(event_handle),
-                    EvtRenderEventXml.0 as u32,
+                    EvtRenderEventXml.0,
                     (buffer.len() * 2) as u32,
                     Some(buffer.as_mut_ptr() as *mut _),
                     &mut buffer_used,
@@ -381,7 +454,7 @@ fn try_format_message(
             EVT_HANDLE(event_handle),
             0,
             None,
-            EvtFormatMessageEvent.0 as u32,
+            EvtFormatMessageEvent.0,
             Some(buffer.as_mut_slice()),
             &mut used,
         )
@@ -410,7 +483,7 @@ fn try_format_message(
                         EVT_HANDLE(event_handle),
                         0,
                         None,
-                        EvtFormatMessageEvent.0 as u32,
+                        EvtFormatMessageEvent.0,
                         Some(buffer.as_mut_slice()),
                         &mut used,
                     )
