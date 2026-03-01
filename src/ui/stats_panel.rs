@@ -158,13 +158,16 @@ impl EventSleuthApp {
         }
 
         let mut open = true;
+        let max_h = ctx.screen_rect().height() * 0.75;
         egui::Window::new("\u{1F4CA} Event Statistics")
             .open(&mut open)
             .collapsible(true)
             .resizable(true)
             .default_width(340.0)
-            .default_height(500.0)
+            .default_height(max_h.min(500.0))
+            .max_height(max_h)
             .show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
                 // Recompute stats if needed
                 if self.stats_dirty {
                     self.stats_cache = self.compute_stats();
@@ -325,7 +328,7 @@ impl EventSleuthApp {
                 egui::CollapsingHeader::new(
                     egui::RichText::new("\u{1F552} Events per Hour").strong(),
                 )
-                .default_open(true)
+                .default_open(false)
                 .show(ui, |ui| {
                     if stats.hourly_histogram.is_empty() {
                         ui.label(
@@ -370,6 +373,7 @@ impl EventSleuthApp {
                         });
                     }
                 });
+                }); // ScrollArea
             });
 
         if !open {
