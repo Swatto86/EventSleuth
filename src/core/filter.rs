@@ -419,7 +419,9 @@ impl FilterState {
         let from = now - chrono::Duration::hours(hours);
         self.time_from = Some(from);
         self.time_to = None;
-        self.time_from_input = from.format("%Y-%m-%d %H:%M:%S").to_string();
+        // Display as local time since parse_datetime_input interprets input as local.
+        let local_from: chrono::DateTime<chrono::Local> = from.with_timezone(&chrono::Local);
+        self.time_from_input = local_from.format("%Y-%m-%d %H:%M:%S").to_string();
         self.time_to_input.clear();
     }
 
@@ -432,7 +434,9 @@ impl FilterState {
                 let from_utc = local_dt.with_timezone(&chrono::Utc);
                 self.time_from = Some(from_utc);
                 self.time_to = None;
-                self.time_from_input = from_utc.format("%Y-%m-%d %H:%M:%S").to_string();
+                // Display as local time (midnight) since parse_datetime_input
+                // interprets input as local.
+                self.time_from_input = naive.format("%Y-%m-%d %H:%M:%S").to_string();
                 self.time_to_input.clear();
             }
         }
