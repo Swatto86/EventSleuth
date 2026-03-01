@@ -206,13 +206,19 @@ fn parse_system_time(s: &str) -> Option<DateTime<Utc>> {
 
     // Windows sometimes emits 7-digit fractional seconds which RFC3339 doesn't
     // handle. Truncate to 6 digits (microseconds) and retry.
+    //
+    // Guard: only attempt the slice when Z is strictly after the decimal point.
+    // If the timestamp is malformed (e.g. Z appears before '.'), the slice
+    // start > end would panic, so we skip straight to the NaiveDateTime fallback.
     if let Some(dot_pos) = s.find('.') {
         if let Some(z_pos) = s.find('Z') {
-            let frac = &s[dot_pos + 1..z_pos];
-            if frac.len() > 6 {
-                let truncated = format!("{}.{}Z", &s[..dot_pos], &frac[..6]);
-                if let Ok(dt) = DateTime::parse_from_rfc3339(&truncated) {
-                    return Some(dt.with_timezone(&Utc));
+            if z_pos > dot_pos + 1 {
+                let frac = &s[dot_pos + 1..z_pos];
+                if frac.len() > 6 {
+                    let truncated = format!("{}.{}Z", &s[..dot_pos], &frac[..6]);
+                    if let Ok(dt) = DateTime::parse_from_rfc3339(&truncated) {
+                        return Some(dt.with_timezone(&Utc));
+                    }
                 }
             }
         }
@@ -330,5 +336,31 @@ mod tests {
     fn test_parse_system_time_3_digits() {
         let dt = parse_system_time("2024-01-15T10:23:45.123Z");
         assert!(dt.is_some());
+    }
+
+    /// Regression test for B1: `parse_system_time` must not panic when the
+    /// 'Z' timezone marker appears before the decimal point in a malformed
+    /// timestamp string.  Previously the unguarded slice `&s[dot_pos+1..z_pos]`
+    /// would panic (start > end) on such input.
+    #[test]
+    fn test_parse_system_time_z_before_dot_returns_none() {
+        // 'Z' at position 4, '.' at position 12 -- Z comes before dot
+        let result = parse_system_time("2024Z-01-15.123");
+        // Must return None, NOT panic
+        assert!(
+            result.is_none(),
+            "malformed timestamp should return None, not panic"
+        );
+    }
+
+    /// Additional malformed case: no fractional part but 'Z' embedded early.
+    #[test]
+    fn test_parse_system_time_no_fractional_seconds() {
+        // Valid ISO 8601 without sub-second precision -- should parse fine
+        let result = parse_system_time("2024-01-15T10:23:45Z");
+        assert!(
+            result.is_some(),
+            "timestamp without fractional seconds should parse successfully"
+        );
     }
 }

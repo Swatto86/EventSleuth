@@ -46,12 +46,15 @@ pub fn enumerate_channels() -> Result<Vec<String>, EventSleuthError> {
             }
             Err(e) => {
                 let code = e.code().0 as u32;
-                // ERROR_NO_MORE_ITEMS = Win32 259 / HRESULT 0x80070103
-                if code == 259 || code == 0x80070103 {
-                    break; // Normal end of enumeration
+                // ERROR_NO_MORE_ITEMS — HRESULT 0x80070103 = normal end of enumeration.
+                // Note: windows-rs errors always surface as HRESULTs (0x8007xxxx);
+                // the raw Win32 code 259 can never appear here.
+                if code == 0x80070103 {
+                    break;
                 }
-                // ERROR_INSUFFICIENT_BUFFER = Win32 122 / HRESULT 0x8007007A
-                if code == 122 || code == 0x8007007A {
+                // ERROR_INSUFFICIENT_BUFFER — HRESULT 0x8007007A: grow buffer and retry.
+                // Note: raw Win32 code 122 can never appear; only HRESULT form matches.
+                if code == 0x8007007A {
                     buffer.resize(used as usize + 64, 0);
                     continue;
                 }
