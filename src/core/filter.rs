@@ -369,6 +369,30 @@ impl FilterState {
             && self.time_to.is_none()
     }
 
+    /// Count how many distinct filter categories are currently active.
+    ///
+    /// Used by the toolbar badge to give users a quick glance at how many
+    /// filters are narrowing the result set.
+    pub fn active_count(&self) -> usize {
+        let mut n = 0usize;
+        if !self.event_id_input.is_empty() {
+            n += 1;
+        }
+        if !self.levels.iter().all(|&v| v) {
+            n += 1;
+        }
+        if !self.provider_filter.is_empty() {
+            n += 1;
+        }
+        if !self.text_search.is_empty() {
+            n += 1;
+        }
+        if self.time_from.is_some() || self.time_to.is_some() {
+            n += 1;
+        }
+        n
+    }
+
     /// Reset all filters to their default (pass-all) state.
     pub fn clear(&mut self) {
         *self = Self::default();

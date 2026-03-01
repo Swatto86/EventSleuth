@@ -7,6 +7,46 @@
 
 use egui::Color32;
 
+// ── Spacing & layout constants ──────────────────────────────────────────
+//
+// Centralised here so every panel/module uses the same rhythm.
+
+/// Standard vertical gap between filter sections or groups.
+pub const SECTION_SPACING: f32 = 10.0;
+
+/// Small vertical gap between related controls within a group.
+pub const ITEM_SPACING: f32 = 4.0;
+
+/// Horizontal gap between toolbar groups / button clusters.
+pub const TOOLBAR_GROUP_SPACING: f32 = 8.0;
+
+/// Row height in the virtual-scrolled event table (logical pixels).
+/// A touch-friendly 24 px avoids mis-clicks on high-DPI screens.
+pub const TABLE_ROW_HEIGHT: f32 = 24.0;
+
+/// Minimum width for small toolbar icon-buttons so they are easy to hit.
+pub const ICON_BTN_SIZE: f32 = 24.0;
+
+// ── Badge / pill helpers ────────────────────────────────────────────────
+
+/// Draw an inline count badge (e.g. "3" in a rounded pill) to surface
+/// the number of active filters or errors at a glance.
+pub fn badge(ui: &mut egui::Ui, count: usize, bg: Color32, fg: Color32) {
+    if count == 0 {
+        return;
+    }
+    let text = format!("{count}");
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text, egui::FontId::proportional(10.0), fg);
+    let desired = egui::vec2(galley.size().x.max(16.0) + 6.0, galley.size().y + 2.0);
+    let (rect, _) = ui.allocate_exact_size(desired, egui::Sense::hover());
+    let rounding = rect.height() / 2.0;
+    ui.painter().rect_filled(rect, rounding, bg);
+    let text_pos = rect.center() - galley.size() / 2.0;
+    ui.painter().galley(text_pos, galley, fg);
+}
+
 // ── Background colours (dark) ───────────────────────────────────────────
 
 /// Main window background (dark).
@@ -192,6 +232,24 @@ pub fn apply_dark_theme(ctx: &egui::Context) {
     visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(50, 50, 70));
 
     ctx.set_visuals(visuals);
+}
+
+/// Background colour for the active-filters banner at the top of the filter panel.
+pub fn filter_active_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(35, 55, 50)
+    } else {
+        Color32::from_rgb(225, 245, 235)
+    }
+}
+
+/// Badge background for error counts.
+pub fn error_badge_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(160, 50, 50)
+    } else {
+        Color32::from_rgb(210, 60, 60)
+    }
 }
 
 /// Apply the EventSleuth light theme.

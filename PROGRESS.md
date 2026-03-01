@@ -1,6 +1,6 @@
 # EventSleuth — Progress Tracker
 
-> Last updated: 2026-02-23
+> Last updated: 2026-03-01
 
 ## Build Status
 
@@ -60,6 +60,7 @@ Tracking against [EventSleuth-Specification.md](EventSleuth-Specification.md).
 | 36 | Saved filter presets | Done | Named presets saved/loaded/deleted via eframe storage; UI in filter panel |
 | 37 | Live tail / auto-refresh | Done | Toggle in toolbar; polls every 5s for new events, appends without clearing |
 | 38 | Security log elevation banner | Done | Prominent warning banner above event table when Security access is denied |
+| 39 | UI/UX audit improvements | Done | Collapsible filter sections, active-filter banner/badge, empty states, disabled export when no events, shortcut hints, channel-selector perf fix, theme spacing constants |
 
 ### UI Layout
 

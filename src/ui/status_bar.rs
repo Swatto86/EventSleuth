@@ -1,4 +1,7 @@
 //! Bottom status bar: event counts, query time, and loading status.
+//!
+//! The error indicator uses a coloured badge so operators notice problems
+//! even if the toolbar is busy.
 
 use crate::app::EventSleuthApp;
 use crate::ui::theme;
@@ -7,7 +10,7 @@ use crate::util::time::format_duration;
 impl EventSleuthApp {
     /// Render the status bar at the bottom of the window.
     ///
-    /// Shows: filtered/total counts | query time | status indicator.
+    /// Shows: filtered/total counts | query time | status indicator | errors.
     pub fn render_status_bar(&self, ui: &mut egui::Ui) {
         let dark = self.dark_mode;
         ui.horizontal_centered(|ui| {
@@ -17,7 +20,7 @@ impl EventSleuthApp {
             let count_text = if filtered == total {
                 format!("{} events", total)
             } else {
-                format!("Showing {} of {} events", filtered, total)
+                format!("{} of {} events", filtered, total)
             };
             ui.label(egui::RichText::new(count_text).color(theme::text_secondary(dark)));
 
@@ -45,7 +48,6 @@ impl EventSleuthApp {
                 };
                 ui.label(egui::RichText::new(progress).color(theme::text_secondary(dark)));
             } else if let Some((ref msg, _)) = self.export_message {
-                // Show export feedback briefly
                 ui.label(egui::RichText::new(msg.as_str()).color(theme::accent(dark)));
             } else if self.live_tail {
                 let since = self
@@ -53,21 +55,32 @@ impl EventSleuthApp {
                     .map(|t| format!("{}s ago", t.elapsed().as_secs()))
                     .unwrap_or_else(|| "starting".into());
                 ui.label(
-                    egui::RichText::new(format!("Live tail active (last check: {since})"))
+                    egui::RichText::new(format!("Live tail (last: {since})"))
                         .color(theme::accent(dark)),
                 );
             } else {
                 ui.label(egui::RichText::new("Ready").color(theme::accent_dim(dark)));
             }
 
-            // ── Errors indicator ────────────────────────────────────────
+            // ── Errors indicator (right-aligned, with badge) ────────
             if !self.errors.is_empty() {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let err_text = format!("⚠ {} error(s)", self.errors.len());
-                    let response =
-                        ui.label(egui::RichText::new(err_text).color(theme::level_color(3, dark)));
-                    // Show error details on hover
+                    let count = self.errors.len();
+                    theme::badge(ui, count, theme::error_badge_bg(dark), egui::Color32::WHITE);
+                    let response = ui.label(
+                        egui::RichText::new(format!(
+                            "\u{26A0} {}",
+                            if count == 1 { "error" } else { "errors" }
+                        ))
+                        .color(theme::level_color(2, dark)),
+                    );
                     response.on_hover_ui(|ui| {
+                        ui.label(
+                            egui::RichText::new("Errors from the last query:")
+                                .color(theme::text_secondary(dark))
+                                .strong(),
+                        );
+                        ui.separator();
                         for (ch, msg) in &self.errors {
                             ui.label(
                                 egui::RichText::new(format!("{ch}: {msg}"))

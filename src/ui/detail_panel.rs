@@ -16,37 +16,65 @@ impl EventSleuthApp {
         let event = match self.selected_event() {
             Some(e) => e.clone(),
             None => {
-                ui.centered_and_justified(|ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(ui.available_height() / 3.0);
                     ui.label(
-                        egui::RichText::new("👆 Select an event to view details")
-                            .color(theme::text_dim(self.dark_mode)),
+                        egui::RichText::new("\u{1F446} Select an event above to view its details")
+                            .color(theme::text_dim(self.dark_mode))
+                            .size(13.0),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new("Tip: use \u{2191}/\u{2193} arrow keys to navigate")
+                            .color(theme::text_dim(self.dark_mode))
+                            .small(),
                     );
                 });
                 return;
             }
         };
 
-        // ── Tab bar ─────────────────────────────────────────────────
+        // \u{2500}\u{2500} Tab bar \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}
         ui.horizontal(|ui| {
             ui.selectable_value(
                 &mut self.detail_tab,
                 DetailTab::Details,
-                egui::RichText::new("📝 Details").strong(),
+                egui::RichText::new("\u{1F4DD} Details").strong(),
             );
             ui.selectable_value(
                 &mut self.detail_tab,
                 DetailTab::Xml,
-                egui::RichText::new("📄 XML").strong(),
+                egui::RichText::new("\u{1F4C4} XML").strong(),
             );
 
-            // Copy buttons on the right
+            // Copy actions grouped on the right
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button("📋 Copy XML").clicked() {
+                if ui
+                    .small_button("\u{1F4CB} XML")
+                    .on_hover_text("Copy the raw XML to the clipboard")
+                    .clicked()
+                {
                     ui.ctx().copy_text(event.raw_xml.clone());
                 }
-                if ui.small_button("📋 Copy Message").clicked() {
+                if ui
+                    .small_button("\u{1F4CB} Message")
+                    .on_hover_text("Copy the formatted message to the clipboard")
+                    .clicked()
+                {
                     ui.ctx().copy_text(event.message.clone());
                 }
+                if ui
+                    .small_button("\u{1F4CB} ID")
+                    .on_hover_text("Copy the Event ID to the clipboard")
+                    .clicked()
+                {
+                    ui.ctx().copy_text(event.event_id.to_string());
+                }
+                ui.label(
+                    egui::RichText::new("Copy:")
+                        .color(theme::text_dim(self.dark_mode))
+                        .small(),
+                );
             });
         });
 

@@ -1,12 +1,11 @@
 //! Central event table with virtual scrolling and sortable columns.
 //!
 //! Uses `egui_extras::TableBuilder` for column layout, which provides
-//! built-in virtual scrolling via its `body.rows()` method — only
+//! built-in virtual scrolling via its `body.rows()` method -- only
 //! visible rows are laid out, keeping performance smooth with 100k+ events.
 
 use crate::app::{EventSleuthApp, SortColumn};
 use crate::ui::theme;
-use crate::util::constants::TABLE_ROW_HEIGHT;
 use crate::util::time::format_table_timestamp;
 use egui_extras::{Column, TableBuilder};
 
@@ -16,8 +15,66 @@ impl EventSleuthApp {
     /// Columns: Timestamp, Level, ID, Provider, Message.
     /// Clicking a header sorts by that column (toggle asc/desc).
     /// Clicking a row selects it and shows details.
+    ///
+    /// When there are no events to display an empty-state message is
+    /// shown instead of a blank area, helping first-time users understand
+    /// what to do next.
     pub fn render_event_table(&mut self, ui: &mut egui::Ui) {
         let row_count = self.filtered_indices.len();
+
+        // ── Empty state ─────────────────────────────────────────────
+        if row_count == 0 {
+            ui.vertical_centered(|ui| {
+                ui.add_space(ui.available_height() / 3.0);
+                if self.is_loading {
+                    ui.spinner();
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Loading events...")
+                            .color(theme::text_dim(self.dark_mode))
+                            .size(15.0),
+                    );
+                } else if self.all_events.is_empty() {
+                    ui.label(
+                        egui::RichText::new("\u{1F4CB}")
+                            .size(32.0)
+                            .color(theme::text_dim(self.dark_mode)),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("No events loaded")
+                            .color(theme::text_secondary(self.dark_mode))
+                            .size(15.0),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new(
+                            "Select sources and click Refresh, or open an .evtx file.",
+                        )
+                        .color(theme::text_dim(self.dark_mode)),
+                    );
+                } else {
+                    // Events loaded but all filtered out
+                    ui.label(
+                        egui::RichText::new("\u{1F50D}")
+                            .size(32.0)
+                            .color(theme::text_dim(self.dark_mode)),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("No events match current filters")
+                            .color(theme::text_secondary(self.dark_mode))
+                            .size(15.0),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new("Try broadening your filters or clearing them.")
+                            .color(theme::text_dim(self.dark_mode)),
+                    );
+                }
+            });
+            return;
+        }
 
         let table = TableBuilder::new(ui)
             .striped(true)
@@ -32,29 +89,24 @@ impl EventSleuthApp {
 
         table
             .header(22.0, |mut header| {
-                // Timestamp column header
                 header.col(|ui| {
                     self.render_sort_header(ui, SortColumn::Timestamp, "Timestamp");
                 });
-                // Level column header
                 header.col(|ui| {
                     self.render_sort_header(ui, SortColumn::Level, "Level");
                 });
-                // Event ID column header
                 header.col(|ui| {
                     self.render_sort_header(ui, SortColumn::EventId, "ID");
                 });
-                // Provider column header
                 header.col(|ui| {
                     self.render_sort_header(ui, SortColumn::Provider, "Provider");
                 });
-                // Message column header
                 header.col(|ui| {
                     self.render_sort_header(ui, SortColumn::Message, "Message");
                 });
             })
             .body(|body| {
-                body.rows(TABLE_ROW_HEIGHT, row_count, |mut row| {
+                body.rows(theme::TABLE_ROW_HEIGHT, row_count, |mut row| {
                     let visible_idx = row.index();
                     if visible_idx >= self.filtered_indices.len() {
                         return;
@@ -65,7 +117,6 @@ impl EventSleuthApp {
                     let dark = self.dark_mode;
                     let level_color = theme::level_color(event.level, dark);
 
-                    // If selected, set the row colour
                     row.set_selected(is_selected);
 
                     // Timestamp
@@ -98,12 +149,9 @@ impl EventSleuthApp {
                     // Message (truncated to one line)
                     row.col(|ui| {
                         let msg = event.display_message();
-                        // Fast path: messages under 200 bytes are definitely
-                        // under 200 chars -- skip char-counting entirely.
                         if msg.len() <= 200 {
                             ui.label(msg);
                         } else {
-                            // Char-safe truncation at 200 characters
                             let end = msg
                                 .char_indices()
                                 .nth(200)
@@ -117,7 +165,6 @@ impl EventSleuthApp {
                         }
                     });
 
-                    // Handle row click → select
                     if row.response().clicked() {
                         self.selected_event_idx = Some(visible_idx);
                     }
@@ -128,14 +175,14 @@ impl EventSleuthApp {
     /// Render a sortable column header button.
     ///
     /// Shows an arrow indicator for the current sort column and toggles
-    /// direction on click.
+    /// direction on click. Tooltip explains the interaction.
     fn render_sort_header(&mut self, ui: &mut egui::Ui, column: SortColumn, label: &str) {
         let is_current = self.sort_column == column;
         let arrow = if is_current {
             if self.sort_ascending {
-                " ▲"
+                " \u{25B2}"
             } else {
-                " ▼"
+                " \u{25BC}"
             }
         } else {
             ""
@@ -151,13 +198,19 @@ impl EventSleuthApp {
             egui::RichText::new(text).color(theme::text_primary(dark))
         };
 
-        if ui.button(rich).clicked() {
+        if ui
+            .button(rich)
+            .on_hover_text(if is_current {
+                "Click to reverse sort order"
+            } else {
+                "Click to sort by this column"
+            })
+            .clicked()
+        {
             if is_current {
-                // Toggle direction
                 self.sort_ascending = !self.sort_ascending;
             } else {
                 self.sort_column = column;
-                // Default: newest first for timestamp, ascending for others
                 self.sort_ascending = column != SortColumn::Timestamp;
             }
             self.sort_events();
