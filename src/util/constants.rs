@@ -90,3 +90,15 @@ pub const LOG_FILE_NAME: &str = "eventsleuth.log";
 
 /// Maximum log file size in bytes before rotation (5 MB).
 pub const MAX_LOG_FILE_SIZE: u64 = 5 * 1024 * 1024;
+
+/// Absolute upper bound on the total number of events held in memory.
+///
+/// During live-tail mode the reader appends new event batches to `all_events`
+/// without ever clearing it.  Without a cap, a busy system running live-tail
+/// for hours can exhaust available memory.
+///
+/// When the cap is exceeded the oldest events are evicted (Rule 11: resource
+/// bounds — growing collections MUST have explicit MAX_SIZE constants).
+/// The value is intentionally generous (4 × the default per-channel max) so
+/// accidental trimming never occurs during a plain full load.
+pub const MAX_TOTAL_EVENTS_CAP: usize = MAX_EVENTS_PER_CHANNEL * 4;

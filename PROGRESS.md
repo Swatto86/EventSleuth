@@ -6,11 +6,11 @@
 
 - **Debug build:** ✅ Compiles — zero errors, zero warnings
 - **Release build:** ✅ Compiles — optimised, LTO, stripped symbols
-- **Unit tests:** ✅ 26/26 passing
+- **Unit tests:** ✅ 147/147 passing
 - **App launches:** ✅ GUI window opens, events load from Application/System sources
 - **CI/CD:** ✅ GitHub Actions workflow for automated release builds
 - **Single instance:** ✅ Named mutex prevents duplicate instances
-- **Clippy:** ✅ Zero warnings on application code
+- **Clippy:** ✅ Zero warnings on application code (with `-D warnings`)
 
 ---
 
@@ -187,6 +187,9 @@ EventSleuth/
 | Bookmarked/pinned events | Star-icon bookmarks in table column + detail panel pin button. "Bookmarks only" filter mode with count badge. |
 | Column visibility toggle | Toolbar Columns dropdown with checkboxes for 7 columns + reset. Dynamic table columns. Settings persisted. |
 | File splitting | Split large files: app.rs→app.rs+app_update.rs, event_reader.rs→event_reader.rs+event_format.rs, filter.rs→filter.rs+filter_preset.rs+filter_tests.rs |
+| **Bug audit – keyboard navigation** | Navigation keys (arrows/Home/End/PageUp/Down) now suppressed while a text-edit field has keyboard focus, preventing inadvertent table jumps while typing filter text. |
+| **Bug audit – max-events feedback** | Filter panel now shows a warning label when the typed max-events value is outside the valid range (1,000–10,000,000), so the effective clamped value is always visible. |
+| **Bug audit – live-tail resource cap** | Added `MAX_TOTAL_EVENTS_CAP` (4x `MAX_EVENTS_PER_CHANNEL`) constant; live-tail queries evict the oldest events when the cap is exceeded, preventing unbounded memory growth on long-running sessions (Rule 11). |
 
 ---
 

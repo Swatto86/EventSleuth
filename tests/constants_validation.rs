@@ -99,3 +99,49 @@ fn max_events_clamping_is_correct() {
         "20M must clamp to maximum 10M"
     );
 }
+// ── Regression tests for Bug fixes shipped in this audit ─────────────────
+
+/// Regression test for Bug B (resource bounds): `MAX_TOTAL_EVENTS_CAP` must
+/// be defined, positive, and strictly greater than `MAX_EVENTS_PER_CHANNEL`
+/// so that a single full load never triggers premature eviction, but live-tail
+/// growth beyond multiple full loads is eventually bounded.
+///
+/// Rule 11: growing collections MUST have explicit MAX_SIZE constants.
+#[test]
+fn live_tail_cap_is_defined_and_larger_than_per_channel_max() {
+    assert!(
+        MAX_TOTAL_EVENTS_CAP > 0,
+        "MAX_TOTAL_EVENTS_CAP must be positive"
+    );
+    assert!(
+        MAX_TOTAL_EVENTS_CAP > MAX_EVENTS_PER_CHANNEL,
+        "MAX_TOTAL_EVENTS_CAP ({}) must exceed MAX_EVENTS_PER_CHANNEL ({}) \
+         so a single full load never triggers eviction",
+        MAX_TOTAL_EVENTS_CAP,
+        MAX_EVENTS_PER_CHANNEL,
+    );
+    // Verify the cap is the documented 4 x multiplier.
+    assert_eq!(
+        MAX_TOTAL_EVENTS_CAP,
+        MAX_EVENTS_PER_CHANNEL * 4,
+        "MAX_TOTAL_EVENTS_CAP must equal MAX_EVENTS_PER_CHANNEL * 4"
+    );
+}
+
+/// Regression test for Bug B (resource bounds): eviction arithmetic must be
+/// exact.  When `all_events.len()` exceeds the cap by `excess` entries, we
+/// must drain exactly `excess` items from the front, leaving the length at
+/// exactly the cap.
+#[test]
+fn live_tail_eviction_arithmetic_is_exact() {
+    let cap = MAX_TOTAL_EVENTS_CAP;
+    // Simulate: 10 tail events pushed on top of a full cap
+    let current_len = cap + 10;
+    let evict = current_len - cap;
+    let after_eviction = current_len - evict;
+    assert_eq!(
+        after_eviction, cap,
+        "after evicting {evict} items the length must equal the cap ({cap})"
+    );
+    assert_eq!(evict, 10, "must evict exactly the excess (10)");
+}

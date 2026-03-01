@@ -103,6 +103,45 @@ impl EventSleuthApp {
             match msg {
                 ReaderMessage::EventBatch(batch) => {
                     self.all_events.extend(batch);
+
+                    // Guard against unbounded memory growth during live-tail.
+                    //
+                    // A full load is bounded by `max_events_per_channel` * channels,
+                    // but each tail poll appends without removing anything.  On a
+                    // busy system this can exhaust memory over extended sessions.
+                    //
+                    // When the cap is hit we evict the oldest events from the front
+                    // of `all_events` (cheapest option: O(n) drain).  After eviction:
+                    //  • `filtered_indices` is invalidated and rebuilt on the next
+                    //    frame via `needs_refilter = true`.
+                    //  • `selected_event_idx` is cleared to avoid a stale visual
+                    //    highlight that would point to the wrong event after eviction.
+                    //  • `bookmarked_indices` are cleared because they are raw indices
+                    //    into `all_events` whose values shift after the drain.  We
+                    //    cannot remap them cheaply without a reverse lookup map.
+                    if self.is_tail_query && self.all_events.len() > constants::MAX_TOTAL_EVENTS_CAP
+                    {
+                        let evict = self.all_events.len() - constants::MAX_TOTAL_EVENTS_CAP;
+                        self.all_events.drain(0..evict);
+                        self.filtered_indices.clear();
+                        self.selected_event_idx = None;
+                        if !self.bookmarked_indices.is_empty() {
+                            self.bookmarked_indices.clear();
+                            self.show_bookmarks_only = false;
+                            tracing::debug!(
+                                "Cleared bookmarks after evicting {} oldest events \
+                                 (live-tail cap {} reached)",
+                                evict,
+                                constants::MAX_TOTAL_EVENTS_CAP,
+                            );
+                        }
+                        tracing::debug!(
+                            "Evicted {} oldest events to stay within live-tail cap of {}",
+                            evict,
+                            constants::MAX_TOTAL_EVENTS_CAP,
+                        );
+                    }
+
                     received_events = true;
                 }
                 ReaderMessage::Progress { count, channel } => {

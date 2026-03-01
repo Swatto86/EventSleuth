@@ -404,6 +404,46 @@ impl EventSleuthApp {
             re.on_hover_text(
                 "Maximum events to load per source channel.\nHigher values use more memory.\nRange: 1,000 - 10,000,000",
             );
+            // Show a warning when the user's typed value falls outside the
+            // valid range.  Without this the field silently shows e.g. "0"
+            // while the effective value is 1,000 (the clamped minimum),
+            // creating a confusing mismatch between displayed and actual values.
+            let raw_parsed = self
+                .max_events_input
+                .replace(',', "")
+                .trim()
+                .parse::<usize>()
+                .ok();
+            if let Some(v) = raw_parsed {
+                if v < 1_000 {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "\u{26A0} Minimum is 1,000 (using {})",
+                            self.max_events_per_channel
+                        ))
+                        .color(theme::level_color(3, dark))
+                        .small(),
+                    );
+                } else if v > 10_000_000 {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "\u{26A0} Maximum is 10,000,000 (using {})",
+                            self.max_events_per_channel
+                        ))
+                        .color(theme::level_color(3, dark))
+                        .small(),
+                    );
+                }
+            } else if !self.max_events_input.trim().is_empty()
+                && !self.max_events_input.trim().replace(',', "").is_empty()
+            {
+                // Non-empty but un-parseable (e.g. letters)
+                ui.label(
+                    egui::RichText::new("\u{26A0} Enter a number")
+                        .color(theme::level_color(3, dark))
+                        .small(),
+                );
+            }
         });
 
         ui.add_space(theme::SECTION_SPACING);

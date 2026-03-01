@@ -139,6 +139,11 @@ impl EventSleuthApp {
     /// - **Home/End**: Jump to first/last event
     /// - **Ctrl+Shift+X**: Clear all filters
     pub fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
+        // Read keyboard-focus state BEFORE entering the input closure because
+        // `wants_keyboard_input()` is a method on `Context`, not `InputState`.
+        // This must be read outside `ctx.input()` to avoid a borrow conflict.
+        let no_text_field_focus = !ctx.wants_keyboard_input();
+
         ctx.input(|i| {
             // F5 or Ctrl+R = Refresh
             if i.key_pressed(egui::Key::F5) || (i.modifiers.ctrl && i.key_pressed(egui::Key::R)) {
@@ -171,48 +176,50 @@ impl EventSleuthApp {
             }
 
             // Arrow keys for event navigation
-            if i.key_pressed(egui::Key::ArrowDown) {
-                if let Some(idx) = self.selected_event_idx {
-                    if idx + 1 < self.filtered_indices.len() {
-                        self.selected_event_idx = Some(idx + 1);
-                    }
-                } else if !self.filtered_indices.is_empty() {
-                    self.selected_event_idx = Some(0);
-                }
-            }
-            if i.key_pressed(egui::Key::ArrowUp) {
-                if let Some(idx) = self.selected_event_idx {
-                    if idx > 0 {
-                        self.selected_event_idx = Some(idx - 1);
+            if no_text_field_focus {
+                if i.key_pressed(egui::Key::ArrowDown) {
+                    if let Some(idx) = self.selected_event_idx {
+                        if idx + 1 < self.filtered_indices.len() {
+                            self.selected_event_idx = Some(idx + 1);
+                        }
+                    } else if !self.filtered_indices.is_empty() {
+                        self.selected_event_idx = Some(0);
                     }
                 }
-            }
+                if i.key_pressed(egui::Key::ArrowUp) {
+                    if let Some(idx) = self.selected_event_idx {
+                        if idx > 0 {
+                            self.selected_event_idx = Some(idx - 1);
+                        }
+                    }
+                }
 
-            // Page Down = jump 20 rows forward
-            if i.key_pressed(egui::Key::PageDown) {
-                let max = self.filtered_indices.len().saturating_sub(1);
-                if let Some(idx) = self.selected_event_idx {
-                    self.selected_event_idx = Some((idx + 20).min(max));
-                } else if !self.filtered_indices.is_empty() {
+                // Page Down = jump 20 rows forward
+                if i.key_pressed(egui::Key::PageDown) {
+                    let max = self.filtered_indices.len().saturating_sub(1);
+                    if let Some(idx) = self.selected_event_idx {
+                        self.selected_event_idx = Some((idx + 20).min(max));
+                    } else if !self.filtered_indices.is_empty() {
+                        self.selected_event_idx = Some(0);
+                    }
+                }
+
+                // Page Up = jump 20 rows backward
+                if i.key_pressed(egui::Key::PageUp) {
+                    if let Some(idx) = self.selected_event_idx {
+                        self.selected_event_idx = Some(idx.saturating_sub(20));
+                    }
+                }
+
+                // Home = jump to first event
+                if i.key_pressed(egui::Key::Home) && !self.filtered_indices.is_empty() {
                     self.selected_event_idx = Some(0);
                 }
-            }
 
-            // Page Up = jump 20 rows backward
-            if i.key_pressed(egui::Key::PageUp) {
-                if let Some(idx) = self.selected_event_idx {
-                    self.selected_event_idx = Some(idx.saturating_sub(20));
+                // End = jump to last event
+                if i.key_pressed(egui::Key::End) && !self.filtered_indices.is_empty() {
+                    self.selected_event_idx = Some(self.filtered_indices.len().saturating_sub(1));
                 }
-            }
-
-            // Home = jump to first event
-            if i.key_pressed(egui::Key::Home) && !self.filtered_indices.is_empty() {
-                self.selected_event_idx = Some(0);
-            }
-
-            // End = jump to last event
-            if i.key_pressed(egui::Key::End) && !self.filtered_indices.is_empty() {
-                self.selected_event_idx = Some(self.filtered_indices.len().saturating_sub(1));
             }
         });
     }
