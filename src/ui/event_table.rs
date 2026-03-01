@@ -53,6 +53,15 @@ impl EventSleuthApp {
                         )
                         .color(theme::text_dim(self.dark_mode)),
                     );
+                    ui.add_space(12.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("\u{1F504} Refresh (F5)").clicked() {
+                            self.start_loading();
+                        }
+                        if ui.button("\u{1F4C2} Open .evtx").clicked() {
+                            self.import_evtx();
+                        }
+                    });
                 } else {
                     // Events loaded but all filtered out
                     ui.label(
@@ -68,9 +77,24 @@ impl EventSleuthApp {
                     );
                     ui.add_space(4.0);
                     ui.label(
-                        egui::RichText::new("Try broadening your filters or clearing them.")
-                            .color(theme::text_dim(self.dark_mode)),
+                        egui::RichText::new(format!(
+                            "{} events loaded but hidden by {} active filter(s).",
+                            self.all_events.len(),
+                            self.filter.active_count()
+                        ))
+                        .color(theme::text_dim(self.dark_mode)),
                     );
+                    ui.add_space(8.0);
+                    if ui
+                        .button("\u{2716} Clear all filters")
+                        .on_hover_text("Remove all active filters (Ctrl+Shift+X)")
+                        .clicked()
+                    {
+                        self.filter.clear();
+                        self.filter.parse_event_ids();
+                        self.filter.parse_time_range();
+                        self.needs_refilter = true;
+                    }
                 }
             });
             return;
@@ -210,14 +234,18 @@ impl EventSleuthApp {
                             "\u{2606}"
                         };
                         let btn = ui.add(
-                            egui::Button::new(egui::RichText::new(icon).size(12.0).color(
+                            egui::Button::new(egui::RichText::new(icon).size(14.0).color(
                                 if is_bookmarked {
                                     theme::accent(dark)
                                 } else {
                                     theme::text_dim(dark)
                                 },
                             ))
-                            .frame(false),
+                            .frame(false)
+                            .min_size(egui::vec2(
+                                theme::BOOKMARK_BTN_SIZE,
+                                theme::BOOKMARK_BTN_SIZE,
+                            )),
                         );
                         if btn.clicked() {
                             bookmark_toggle.set(Some(event_idx));

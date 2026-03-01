@@ -311,7 +311,7 @@ impl eframe::App for EventSleuthApp {
 
         // ── Top toolbar ─────────────────────────────────────────────
         egui::TopBottomPanel::top("toolbar")
-            .exact_height(36.0)
+            .exact_height(38.0)
             .show(ctx, |ui| {
                 ui.add_space(4.0);
                 self.render_toolbar(ui);
@@ -319,7 +319,7 @@ impl eframe::App for EventSleuthApp {
 
         // ── Bottom status bar ───────────────────────────────────────
         egui::TopBottomPanel::bottom("status_bar")
-            .exact_height(26.0)
+            .exact_height(28.0)
             .show(ctx, |ui| {
                 self.render_status_bar(ui);
             });
@@ -336,9 +336,9 @@ impl eframe::App for EventSleuthApp {
         // ── Left filter panel ───────────────────────────────────────
         egui::SidePanel::left("filter_panel")
             .resizable(true)
-            .default_width(200.0)
-            .min_width(160.0)
-            .max_width(350.0)
+            .default_width(230.0)
+            .min_width(180.0)
+            .max_width(380.0)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     self.render_filter_panel(ui);

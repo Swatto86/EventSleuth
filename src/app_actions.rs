@@ -132,14 +132,25 @@ impl EventSleuthApp {
 impl EventSleuthApp {
     /// Handle global keyboard shortcuts.
     ///
-    /// - **F5**: Refresh (re-query selected sources)
+    /// - **F5 / Ctrl+R**: Refresh (re-query selected sources)
     /// - **Escape**: Close open dialogs / clear selection
     /// - **Up/Down arrows**: Navigate event table selection
+    /// - **Page Up/Down**: Jump 20 rows in event table
+    /// - **Home/End**: Jump to first/last event
+    /// - **Ctrl+Shift+X**: Clear all filters
     pub fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
-            // F5 = Refresh
-            if i.key_pressed(egui::Key::F5) {
+            // F5 or Ctrl+R = Refresh
+            if i.key_pressed(egui::Key::F5) || (i.modifiers.ctrl && i.key_pressed(egui::Key::R)) {
                 self.start_loading();
+            }
+
+            // Ctrl+Shift+X = Clear all filters
+            if i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::X) {
+                self.filter.clear();
+                self.filter.parse_event_ids();
+                self.filter.parse_time_range();
+                self.needs_refilter = true;
             }
 
             // Escape = Close dialogs, then clear selection
@@ -148,6 +159,10 @@ impl EventSleuthApp {
                     self.show_about = false;
                 } else if self.show_channel_selector {
                     self.show_channel_selector = false;
+                } else if self.show_save_preset {
+                    self.show_save_preset = false;
+                } else if self.show_stats {
+                    self.show_stats = false;
                 } else {
                     self.selected_event_idx = None;
                 }
@@ -169,6 +184,33 @@ impl EventSleuthApp {
                         self.selected_event_idx = Some(idx - 1);
                     }
                 }
+            }
+
+            // Page Down = jump 20 rows forward
+            if i.key_pressed(egui::Key::PageDown) {
+                let max = self.filtered_indices.len().saturating_sub(1);
+                if let Some(idx) = self.selected_event_idx {
+                    self.selected_event_idx = Some((idx + 20).min(max));
+                } else if !self.filtered_indices.is_empty() {
+                    self.selected_event_idx = Some(0);
+                }
+            }
+
+            // Page Up = jump 20 rows backward
+            if i.key_pressed(egui::Key::PageUp) {
+                if let Some(idx) = self.selected_event_idx {
+                    self.selected_event_idx = Some(idx.saturating_sub(20));
+                }
+            }
+
+            // Home = jump to first event
+            if i.key_pressed(egui::Key::Home) && !self.filtered_indices.is_empty() {
+                self.selected_event_idx = Some(0);
+            }
+
+            // End = jump to last event
+            if i.key_pressed(egui::Key::End) && !self.filtered_indices.is_empty() {
+                self.selected_event_idx = Some(self.filtered_indices.len().saturating_sub(1));
             }
         });
     }

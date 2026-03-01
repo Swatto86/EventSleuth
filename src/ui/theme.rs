@@ -15,17 +15,20 @@ use egui::Color32;
 pub const SECTION_SPACING: f32 = 10.0;
 
 /// Small vertical gap between related controls within a group.
-pub const ITEM_SPACING: f32 = 4.0;
+pub const ITEM_SPACING: f32 = 6.0;
 
 /// Horizontal gap between toolbar groups / button clusters.
 pub const TOOLBAR_GROUP_SPACING: f32 = 8.0;
 
 /// Row height in the virtual-scrolled event table (logical pixels).
-/// A touch-friendly 24 px avoids mis-clicks on high-DPI screens.
-pub const TABLE_ROW_HEIGHT: f32 = 24.0;
+/// 26 px gives comfortable readability while remaining compact.
+pub const TABLE_ROW_HEIGHT: f32 = 26.0;
 
 /// Minimum width for small toolbar icon-buttons so they are easy to hit.
-pub const ICON_BTN_SIZE: f32 = 24.0;
+pub const ICON_BTN_SIZE: f32 = 26.0;
+
+/// Minimum click-target size for inline bookmark/pin icons.
+pub const BOOKMARK_BTN_SIZE: f32 = 18.0;
 
 // ── Badge / pill helpers ────────────────────────────────────────────────
 

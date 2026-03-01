@@ -46,7 +46,7 @@ impl EventSleuthApp {
             } else {
                 let refresh = ui
                     .button("\u{1F504} Refresh")
-                    .on_hover_text("Re-query selected sources (F5)");
+                    .on_hover_text("Re-query selected sources (F5 or Ctrl+R)");
                 if refresh.clicked() {
                     self.start_loading();
                 }
@@ -180,7 +180,7 @@ impl EventSleuthApp {
             .response
             .on_hover_text("Show or hide table columns");
 
-            // ── Right-aligned app title + about + theme toggle ─────────
+            // ── Right-aligned app title + about + theme toggle + shortcuts ──
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let about_btn = ui.add(
                     egui::Button::new(egui::RichText::new("\u{2139}").size(14.0))
@@ -213,6 +213,47 @@ impl EventSleuthApp {
                         theme::apply_light_theme(ui.ctx());
                     }
                 }
+
+                // Keyboard shortcuts reference tooltip
+                let kb_btn = ui.add(
+                    egui::Button::new(egui::RichText::new("\u{2328}").size(14.0))
+                        .min_size(egui::vec2(theme::ICON_BTN_SIZE, theme::ICON_BTN_SIZE)),
+                );
+                kb_btn.on_hover_ui(|ui| {
+                    ui.label(
+                        egui::RichText::new("Keyboard Shortcuts")
+                            .color(theme::accent(self.dark_mode))
+                            .strong(),
+                    );
+                    ui.separator();
+                    let shortcuts = [
+                        ("F5 / Ctrl+R", "Refresh sources"),
+                        ("Escape", "Close dialog / deselect"),
+                        ("\u{2191} / \u{2193}", "Navigate events"),
+                        ("Page Up / Down", "Jump 20 events"),
+                        ("Home / End", "First / last event"),
+                        ("Ctrl+Shift+X", "Clear all filters"),
+                    ];
+                    egui::Grid::new("shortcuts_grid")
+                        .num_columns(2)
+                        .spacing([12.0, 2.0])
+                        .show(ui, |ui| {
+                            for (key, desc) in &shortcuts {
+                                ui.label(
+                                    egui::RichText::new(*key)
+                                        .color(theme::text_primary(self.dark_mode))
+                                        .strong()
+                                        .small(),
+                                );
+                                ui.label(
+                                    egui::RichText::new(*desc)
+                                        .color(theme::text_secondary(self.dark_mode))
+                                        .small(),
+                                );
+                                ui.end_row();
+                            }
+                        });
+                });
 
                 ui.label(
                     egui::RichText::new("\u{1F50D} EventSleuth")

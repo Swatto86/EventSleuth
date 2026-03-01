@@ -36,7 +36,7 @@ pub const CHANNEL_BOUND: usize = 256;
 /// NOTE: The canonical value is now in `ui::theme::TABLE_ROW_HEIGHT`.
 /// This constant is retained for backward compatibility only.
 #[allow(dead_code)]
-pub const TABLE_ROW_HEIGHT: f32 = 24.0;
+pub const TABLE_ROW_HEIGHT: f32 = 26.0;
 
 /// How many events to accumulate in a batch before sending to the UI.
 /// Smaller batches = more responsive UI updates; larger = less overhead.

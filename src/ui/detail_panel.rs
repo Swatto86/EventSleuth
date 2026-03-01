@@ -19,15 +19,17 @@ impl EventSleuthApp {
                 ui.vertical_centered(|ui| {
                     ui.add_space(ui.available_height() / 3.0);
                     ui.label(
-                        egui::RichText::new("\u{1F446} Select an event above to view its details")
+                        egui::RichText::new("Select an event above to view its details")
                             .color(theme::text_dim(self.dark_mode))
                             .size(13.0),
                     );
-                    ui.add_space(4.0);
+                    ui.add_space(6.0);
                     ui.label(
-                        egui::RichText::new("Tip: use \u{2191}/\u{2193} arrow keys to navigate")
-                            .color(theme::text_dim(self.dark_mode))
-                            .small(),
+                        egui::RichText::new(
+                            "Navigate with \u{2191}/\u{2193} arrows, Page Up/Down, or click a row",
+                        )
+                        .color(theme::text_dim(self.dark_mode))
+                        .small(),
                     );
                 });
                 return;
@@ -50,31 +52,26 @@ impl EventSleuthApp {
             // Copy actions and bookmark toggle grouped on the right
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
-                    .small_button("\u{1F4CB} XML")
+                    .small_button("\u{1F4CB} Copy XML")
                     .on_hover_text("Copy the raw XML to the clipboard")
                     .clicked()
                 {
                     ui.ctx().copy_text(event.raw_xml.clone());
                 }
                 if ui
-                    .small_button("\u{1F4CB} Message")
+                    .small_button("\u{1F4CB} Copy Msg")
                     .on_hover_text("Copy the formatted message to the clipboard")
                     .clicked()
                 {
                     ui.ctx().copy_text(event.message.clone());
                 }
                 if ui
-                    .small_button("\u{1F4CB} ID")
+                    .small_button("\u{1F4CB} Copy ID")
                     .on_hover_text("Copy the Event ID to the clipboard")
                     .clicked()
                 {
                     ui.ctx().copy_text(event.event_id.to_string());
                 }
-                ui.label(
-                    egui::RichText::new("Copy:")
-                        .color(theme::text_dim(self.dark_mode))
-                        .small(),
-                );
                 ui.separator();
                 // Bookmark toggle for the selected event
                 if let Some(vis_idx) = self.selected_event_idx {
@@ -126,7 +123,7 @@ impl EventSleuthApp {
         egui::Grid::new("detail_header_grid")
             .num_columns(4)
             .striped(false)
-            .spacing([20.0, 4.0])
+            .spacing([20.0, 6.0])
             .show(ui, |ui| {
                 // Row 1
                 ui.label(egui::RichText::new("Event ID").color(theme::text_dim(dark)));
