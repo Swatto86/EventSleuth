@@ -369,6 +369,7 @@ impl EventSleuthApp {
 
         if !open {
             self.show_channel_selector = false;
+            self.channel_search.clear();
         }
     }
 }

@@ -456,19 +456,20 @@ where
             Err(e) => {
                 let transient = matches!(&e, EventSleuthError::WindowsApi { hr, .. } if is_transient_error(*hr));
                 attempt += 1;
-                if !transient || attempt >= MAX_RETRY_ATTEMPTS {
+                if !transient || attempt > MAX_RETRY_ATTEMPTS {
                     if transient {
                         tracing::warn!(
                             "Transient error persisted after {} retries: {}",
-                            attempt,
+                            attempt - 1,
                             e
                         );
                     }
                     return Err(e);
                 }
-                let delay_ms = RETRY_BASE_DELAY_MS * (1u64 << attempt);
+                // Delay sequence: 50ms -> 100ms -> 200ms (base * 2^(attempt-1))
+                let delay_ms = RETRY_BASE_DELAY_MS * (1u64 << (attempt - 1));
                 tracing::debug!(
-                    "Transient error (attempt {}/{}), retrying in {}ms: {}",
+                    "Transient error (retry {}/{}), retrying in {}ms: {}",
                     attempt,
                     MAX_RETRY_ATTEMPTS,
                     delay_ms,
