@@ -246,8 +246,9 @@ impl EventSleuthApp {
         let mut fonts = egui::FontDefinitions::default();
 
         // Segoe UI Symbol — geometric shapes, arrows, misc symbols
-        let symbol_path = r"C:\Windows\Fonts\seguisym.ttf";
-        if let Ok(data) = std::fs::read(symbol_path) {
+        let windir = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".to_string());
+        let symbol_path = format!(r"{}\Fonts\seguisym.ttf", windir);
+        if let Ok(data) = std::fs::read(&symbol_path) {
             fonts.font_data.insert(
                 "segoe_ui_symbol".to_owned(),
                 egui::FontData::from_owned(data).into(),
@@ -261,8 +262,8 @@ impl EventSleuthApp {
         }
 
         // Segoe UI Emoji — colour emoji (rendered monochrome in egui)
-        let emoji_path = r"C:\Windows\Fonts\seguiemj.ttf";
-        if let Ok(data) = std::fs::read(emoji_path) {
+        let emoji_path = format!(r"{}\Fonts\seguiemj.ttf", windir);
+        if let Ok(data) = std::fs::read(&emoji_path) {
             fonts.font_data.insert(
                 "segoe_ui_emoji".to_owned(),
                 egui::FontData::from_owned(data).into(),
@@ -388,6 +389,12 @@ impl EventSleuthApp {
     /// allocation on every filter pass (significant for repeated filtering
     /// during text search with debounce).
     pub fn apply_filter(&mut self) {
+        // Remember which underlying event was selected so we can restore
+        // the highlight after the filtered/sorted index list changes.
+        let prev_event_idx = self
+            .selected_event_idx
+            .and_then(|vis| self.filtered_indices.get(vis).copied());
+
         self.filtered_indices.clear();
         self.filtered_indices.extend(
             self.all_events
@@ -399,7 +406,15 @@ impl EventSleuthApp {
 
         self.sort_events();
 
-        // Clamp selection to valid range
+        // Restore selection: find the previously-selected event in the
+        // new filtered list. Falls back to clamping if the event was
+        // filtered out.
+        if let Some(ev_idx) = prev_event_idx {
+            self.selected_event_idx = self.filtered_indices.iter().position(|&i| i == ev_idx);
+        }
+
+        // Clamp selection to valid range (covers the case where the
+        // previously-selected event was filtered out).
         if let Some(idx) = self.selected_event_idx {
             if idx >= self.filtered_indices.len() {
                 self.selected_event_idx = if self.filtered_indices.is_empty() {

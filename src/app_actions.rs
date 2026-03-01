@@ -303,10 +303,13 @@ impl EventSleuthApp {
         let (tx, rx) = crossbeam_channel::bounded(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));
 
+        // Tail queries must not apply an upper time bound: if the user
+        // previously set a `time_to` filter, honouring it here would
+        // silently prevent any new events from ever appearing.
         let _handle = event_reader::spawn_reader_thread(
             self.selected_channels.clone(),
             tail_from.or(self.filter.time_from),
-            self.filter.time_to,
+            None,
             tx,
             cancel.clone(),
         );
