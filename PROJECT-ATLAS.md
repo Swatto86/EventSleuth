@@ -1,6 +1,6 @@
 # EventSleuth - Project Atlas
 
-> **Last updated**: 2026-03-01 (v1.0.4)
+> **Last updated**: 2026-03-01 (v1.0.6)
 
 ## System Purpose
 

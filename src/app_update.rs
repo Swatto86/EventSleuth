@@ -91,90 +91,125 @@ impl EventSleuthApp {
     ///
     /// Called once per frame. Non-blocking — uses `try_recv` in a loop
     /// to drain all available messages.
+    ///
+    /// Explicitly distinguishes `TryRecvError::Empty` (normal: no messages
+    /// ready yet) from `TryRecvError::Disconnected` (abnormal: the sender
+    /// was dropped, which happens when the reader thread panics before
+    /// sending `Complete`).  Without this distinction the loading spinner
+    /// would spin forever on thread panic.
     pub(crate) fn process_messages(&mut self) {
         let rx = match &self.reader_rx {
             Some(rx) => rx.clone(),
             None => return,
         };
 
-        // Drain all available messages this frame
+        // Drain all available messages this frame.
+        // Track whether the channel became disconnected without a Complete
+        // message so that we can clean up the loading state (Bug fix: thread
+        // panic left is_loading=true indefinitely).
         let mut received_events = false;
-        while let Ok(msg) = rx.try_recv() {
-            match msg {
-                ReaderMessage::EventBatch(batch) => {
-                    self.all_events.extend(batch);
+        let mut sender_disconnected = false;
+        loop {
+            match rx.try_recv() {
+                Ok(msg) => match msg {
+                    ReaderMessage::EventBatch(batch) => {
+                        self.all_events.extend(batch);
 
-                    // Guard against unbounded memory growth during live-tail.
-                    //
-                    // A full load is bounded by `max_events_per_channel` * channels,
-                    // but each tail poll appends without removing anything.  On a
-                    // busy system this can exhaust memory over extended sessions.
-                    //
-                    // When the cap is hit we evict the oldest events from the front
-                    // of `all_events` (cheapest option: O(n) drain).  After eviction:
-                    //  • `filtered_indices` is invalidated and rebuilt on the next
-                    //    frame via `needs_refilter = true`.
-                    //  • `selected_event_idx` is cleared to avoid a stale visual
-                    //    highlight that would point to the wrong event after eviction.
-                    //  • `bookmarked_indices` are cleared because they are raw indices
-                    //    into `all_events` whose values shift after the drain.  We
-                    //    cannot remap them cheaply without a reverse lookup map.
-                    if self.is_tail_query && self.all_events.len() > constants::MAX_TOTAL_EVENTS_CAP
-                    {
-                        let evict = self.all_events.len() - constants::MAX_TOTAL_EVENTS_CAP;
-                        self.all_events.drain(0..evict);
-                        self.filtered_indices.clear();
-                        self.selected_event_idx = None;
-                        if !self.bookmarked_indices.is_empty() {
-                            self.bookmarked_indices.clear();
-                            self.show_bookmarks_only = false;
-                            tracing::debug!(
-                                "Cleared bookmarks after evicting {} oldest events \
+                        // Guard against unbounded memory growth during live-tail.
+                        //
+                        // A full load is bounded by `max_events_per_channel` * channels,
+                        // but each tail poll appends without removing anything.  On a
+                        // busy system this can exhaust memory over extended sessions.
+                        //
+                        // When the cap is hit we evict the oldest events from the front
+                        // of `all_events` (cheapest option: O(n) drain).  After eviction:
+                        //  • `filtered_indices` is invalidated and rebuilt on the next
+                        //    frame via `needs_refilter = true`.
+                        //  • `selected_event_idx` is cleared to avoid a stale visual
+                        //    highlight that would point to the wrong event after eviction.
+                        //  • `bookmarked_indices` are cleared because they are raw indices
+                        //    into `all_events` whose values shift after the drain.  We
+                        //    cannot remap them cheaply without a reverse lookup map.
+                        if self.is_tail_query
+                            && self.all_events.len() > constants::MAX_TOTAL_EVENTS_CAP
+                        {
+                            let evict = self.all_events.len() - constants::MAX_TOTAL_EVENTS_CAP;
+                            self.all_events.drain(0..evict);
+                            self.filtered_indices.clear();
+                            self.selected_event_idx = None;
+                            if !self.bookmarked_indices.is_empty() {
+                                self.bookmarked_indices.clear();
+                                self.show_bookmarks_only = false;
+                                tracing::debug!(
+                                    "Cleared bookmarks after evicting {} oldest events \
                                  (live-tail cap {} reached)",
+                                    evict,
+                                    constants::MAX_TOTAL_EVENTS_CAP,
+                                );
+                            }
+                            tracing::debug!(
+                                "Evicted {} oldest events to stay within live-tail cap of {}",
                                 evict,
                                 constants::MAX_TOTAL_EVENTS_CAP,
                             );
                         }
-                        tracing::debug!(
-                            "Evicted {} oldest events to stay within live-tail cap of {}",
-                            evict,
-                            constants::MAX_TOTAL_EVENTS_CAP,
-                        );
-                    }
 
-                    received_events = true;
-                }
-                ReaderMessage::Progress { count, channel } => {
-                    self.progress_count = count;
-                    self.progress_channel = channel;
-                }
-                ReaderMessage::Complete { total, elapsed } => {
-                    self.is_loading = false;
-                    self.reader_rx = None;
-                    self.cancel_flag = None;
-                    // Always invalidate the stats cache when a query finishes,
-                    // including the zero-event case where no EventBatch
-                    // messages arrived and needs_refilter was never set.
-                    self.stats_dirty = true;
-                    if self.is_tail_query {
-                        // Tail query: only update status if new events arrived
-                        if total > 0 {
-                            self.status_text = format!("{} new events (live tail)", total);
-                            tracing::info!("Tail complete: {} new events", total);
+                        received_events = true;
+                    }
+                    ReaderMessage::Progress { count, channel } => {
+                        self.progress_count = count;
+                        self.progress_channel = channel;
+                    }
+                    ReaderMessage::Complete { total, elapsed } => {
+                        self.is_loading = false;
+                        self.reader_rx = None;
+                        self.cancel_flag = None;
+                        // Always invalidate the stats cache when a query finishes,
+                        // including the zero-event case where no EventBatch
+                        // messages arrived and needs_refilter was never set.
+                        self.stats_dirty = true;
+                        if self.is_tail_query {
+                            // Tail query: only update status if new events arrived
+                            if total > 0 {
+                                self.status_text = format!("{} new events (live tail)", total);
+                                tracing::info!("Tail complete: {} new events", total);
+                            }
+                            self.is_tail_query = false;
+                        } else {
+                            self.query_elapsed = Some(elapsed);
+                            self.status_text = format!("Loaded {} events", total);
+                            tracing::info!("Load complete: {} events", total);
                         }
-                        self.is_tail_query = false;
-                    } else {
-                        self.query_elapsed = Some(elapsed);
-                        self.status_text = format!("Loaded {} events", total);
-                        tracing::info!("Load complete: {} events", total);
                     }
-                }
-                ReaderMessage::Error { channel, error } => {
-                    if self.errors.len() < constants::MAX_ERRORS {
-                        self.errors.push((channel, error));
+                    ReaderMessage::Error { channel, error } => {
+                        if self.errors.len() < constants::MAX_ERRORS {
+                            self.errors.push((channel, error));
+                        }
                     }
+                },
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    sender_disconnected = true;
+                    break;
                 }
             }
+        }
+
+        // If the sender disconnected before we saw a Complete message, the
+        // reader thread crashed (panicked).  Clean up loading state and
+        // surface an error so the user sees a diagnostic rather than an
+        // endless spinner (Bug fix: thread panic left is_loading=true).
+        if sender_disconnected && self.is_loading {
+            self.is_loading = false;
+            self.reader_rx = None;
+            self.cancel_flag = None;
+            self.stats_dirty = true;
+            let msg = "Reader thread terminated unexpectedly (check log for details)".to_string();
+            tracing::error!("{}", msg);
+            if self.errors.len() < constants::MAX_ERRORS {
+                self.errors.push(("(internal)".into(), msg.clone()));
+            }
+            self.status_text = msg;
         }
 
         if received_events {
@@ -212,15 +247,25 @@ impl EventSleuthApp {
         self.sort_events();
 
         // Restore selection: find the previously-selected event in the
-        // new filtered list. Falls back to clamping if the event was
-        // filtered out.
+        // new filtered list.  When the event was filtered out, fall back to
+        // clamping to the last visible row so the detail panel stays populated
+        // (Bug fix: the old code cleared selection instead of clamping).
         if let Some(ev_idx) = prev_event_idx {
-            self.selected_event_idx = self.filtered_indices.iter().position(|&i| i == ev_idx);
-        }
-
-        // Clamp selection to valid range (covers the case where the
-        // previously-selected event was filtered out).
-        if let Some(idx) = self.selected_event_idx {
+            match self.filtered_indices.iter().position(|&i| i == ev_idx) {
+                Some(new_vis) => self.selected_event_idx = Some(new_vis),
+                None => {
+                    // Previously-selected event is now filtered out: clamp to
+                    // the last visible row so something remains selected.
+                    self.selected_event_idx = if self.filtered_indices.is_empty() {
+                        None
+                    } else {
+                        Some(self.filtered_indices.len() - 1)
+                    };
+                }
+            }
+        } else if let Some(idx) = self.selected_event_idx {
+            // No previous event resolved (e.g. selection was already stale):
+            // clamp to a valid range so we never hold an out-of-bounds index.
             if idx >= self.filtered_indices.len() {
                 self.selected_event_idx = if self.filtered_indices.is_empty() {
                     None
