@@ -96,13 +96,77 @@ pub fn categorise_channel(channel: &str) -> (&str, &str) {
 /// Returns the subset of channels that are commonly useful.
 ///
 /// These are shown first / selected by default in the UI.
+///
+/// Pushes the **actual** channel name found in `all` (preserving the
+/// casing returned by the OS) rather than a hardcoded string.  This
+/// ensures that `selected_channels` values are always byte-identical to
+/// their counterparts in `channels`, so the channel-selector checkboxes
+/// are rendered correctly regardless of OS casing (e.g. `"SECURITY"`
+/// vs `"Security"`).
 pub fn common_channels(all: &[String]) -> Vec<String> {
     let common = ["Application", "System", "Security", "Setup"];
     let mut result = Vec::new();
     for name in &common {
-        if all.iter().any(|c| c.eq_ignore_ascii_case(name)) {
-            result.push(name.to_string());
+        if let Some(found) = all.iter().find(|c| c.eq_ignore_ascii_case(name)) {
+            result.push(found.clone());
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strv(s: &[&str]) -> Vec<String> {
+        s.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// `common_channels` must return the **actual** string from the list,
+    /// not a hardcoded canonical form.
+    /// Regression test for B3: previously the function always pushed
+    /// `"Security"` even when the OS list contained `"SECURITY"`, causing
+    /// the channel-selector checkbox to appear unchecked.
+    #[test]
+    fn test_common_channels_preserves_actual_casing() {
+        let all = strv(&["application", "SYSTEM", "SECURITY", "Setup"]);
+        let result = common_channels(&all);
+        assert!(
+            result.contains(&"application".to_string()),
+            "must keep OS casing"
+        );
+        assert!(
+            result.contains(&"SYSTEM".to_string()),
+            "must keep OS casing"
+        );
+        assert!(
+            result.contains(&"SECURITY".to_string()),
+            "must keep OS casing"
+        );
+        assert!(result.contains(&"Setup".to_string()), "must keep OS casing");
+    }
+
+    /// Channels absent from the system list must not be added.
+    #[test]
+    fn test_common_channels_skips_absent_channels() {
+        let all = strv(&["Application", "System"]);
+        let result = common_channels(&all);
+        assert_eq!(result.len(), 2);
+        assert!(!result.iter().any(|c| c.eq_ignore_ascii_case("Security")));
+        assert!(!result.iter().any(|c| c.eq_ignore_ascii_case("Setup")));
+    }
+
+    /// The returned names must be exact elements of the input `all` slice
+    /// so that `selected_channels.contains(channel)` lookups work correctly.
+    #[test]
+    fn test_common_channels_names_are_in_all() {
+        let all = strv(&["Application", "System", "Security", "Setup", "Other"]);
+        let result = common_channels(&all);
+        for name in &result {
+            assert!(
+                all.contains(name),
+                "returned name '{name}' must be an element of the input slice"
+            );
+        }
+    }
 }

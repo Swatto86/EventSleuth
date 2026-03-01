@@ -274,7 +274,16 @@ impl EventSleuthApp {
 impl EventSleuthApp {
     /// Open a native file dialog (on a background thread) to select an
     /// `.evtx` file. The chosen path is sent back via `import_rx`.
+    ///
+    /// Guards against double-activation: if a file dialog is already open
+    /// (`import_rx` is `Some`), the call is a no-op so the first dialog is
+    /// not silently abandoned.
     pub fn import_evtx(&mut self) {
+        if self.import_rx.is_some() {
+            // A file dialog is already pending — do not spawn a second one.
+            tracing::debug!("import_evtx: dialog already open, ignoring duplicate call");
+            return;
+        }
         let (tx, rx) = crossbeam_channel::bounded(1);
         self.import_rx = Some(rx);
 

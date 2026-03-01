@@ -23,6 +23,11 @@ impl EventSleuthApp {
         // Cancel any existing reader
         self.cancel_loading();
 
+        // Reset the tail flag so a full load is never misidentified as a
+        // tail completion in `process_messages` (fixes incorrect status
+        // text when the user refreshes while live-tail is running).
+        self.is_tail_query = false;
+
         if self.selected_channels.is_empty() {
             self.status_text = "No sources selected".into();
             return;
