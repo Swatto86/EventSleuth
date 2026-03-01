@@ -388,6 +388,14 @@ impl EventSleuthApp {
             })
             .clicked()
         {
+            // Save the underlying event index so we can re-locate the same
+            // event in the resorted list and keep the selection stable.
+            // Without this the highlighted row jumps to whatever event
+            // happens to land at the old visual index after the sort.
+            let prev_event_idx = self
+                .selected_event_idx
+                .and_then(|vis| self.filtered_indices.get(vis).copied());
+
             if is_current {
                 self.sort_ascending = !self.sort_ascending;
             } else {
@@ -395,6 +403,11 @@ impl EventSleuthApp {
                 self.sort_ascending = column != SortColumn::Timestamp;
             }
             self.sort_events();
+
+            // Restore selection to the same event in the new sort order.
+            if let Some(ev_idx) = prev_event_idx {
+                self.selected_event_idx = self.filtered_indices.iter().position(|&i| i == ev_idx);
+            }
         }
     }
 }

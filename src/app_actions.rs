@@ -450,8 +450,16 @@ impl EventSleuthApp {
                 ui.label("Preset name:");
                 let response = ui.text_edit_singleline(&mut self.preset_name_input);
 
-                // Auto-focus the text field
-                if response.gained_focus() || self.preset_name_input.is_empty() {
+                // Auto-focus the text field once when the dialog first opens.
+                // Previously this called request_focus() on every frame while
+                // the input was empty, which stole keyboard focus away from
+                // every other widget in the application until the user typed
+                // at least one character.
+                if response.gained_focus() {
+                    response.request_focus();
+                } else if !response.has_focus() && self.preset_name_input.is_empty() {
+                    // Only steal focus if the field genuinely has no focus yet
+                    // (e.g. the dialog just opened and nothing has been focused).
                     response.request_focus();
                 }
 

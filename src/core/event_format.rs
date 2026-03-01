@@ -49,8 +49,10 @@ pub(super) fn render_event_xml(
 
     if let Err(e) = result {
         let code = e.code().0 as u32;
-        // ERROR_INSUFFICIENT_BUFFER (122) — grow and retry
-        if code == 122 || code == 0x8007007A {
+        // ERROR_INSUFFICIENT_BUFFER — HRESULT 0x8007007A: grow buffer and retry.
+        // Note: windows-rs errors always surface as HRESULTs (0x8007xxxx);
+        // the raw Win32 code 122 can never appear here, only the HRESULT form.
+        if code == 0x8007007A {
             let needed = (buffer_used as usize / 2) + 1;
             buffer.resize(needed, 0);
             // SAFETY: retrying with larger buffer
@@ -161,8 +163,10 @@ pub(super) fn try_format_message(
         }
         Err(e) => {
             let code = e.code().0 as u32;
-            // ERROR_INSUFFICIENT_BUFFER — retry with larger buffer
-            if code == 122 || code == 0x8007007A {
+            // ERROR_INSUFFICIENT_BUFFER — HRESULT 0x8007007A: retry with larger buffer.
+            // Note: windows-rs errors always surface as HRESULTs (0x8007xxxx);
+            // the raw Win32 code 122 can never appear here, only the HRESULT form.
+            if code == 0x8007007A {
                 buffer.resize(used as usize + 1, 0);
                 // SAFETY: retrying with larger buffer
                 let retry = unsafe {
