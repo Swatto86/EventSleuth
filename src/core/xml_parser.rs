@@ -313,7 +313,10 @@ mod tests {
         assert_eq!(record.process_id, 4532);
         assert_eq!(record.thread_id, 7890);
         assert_eq!(record.event_data.len(), 2);
-        assert_eq!(record.event_data[0], ("ProgramName".into(), "explorer.exe".into()));
+        assert_eq!(
+            record.event_data[0],
+            ("ProgramName".into(), "explorer.exe".into())
+        );
         assert_eq!(record.user_sid, Some("S-1-5-21-123".into()));
     }
 

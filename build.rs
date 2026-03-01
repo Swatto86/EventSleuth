@@ -47,14 +47,8 @@ fn generate_icon() {
         let img = render_icon(size);
         let mut png_data = Vec::new();
         let encoder = image::codecs::png::PngEncoder::new(&mut png_data);
-        image::ImageEncoder::write_image(
-            encoder,
-            &img,
-            size,
-            size,
-            image::ColorType::Rgba8.into(),
-        )
-        .expect("PNG encoding failed");
+        image::ImageEncoder::write_image(encoder, &img, size, size, image::ColorType::Rgba8.into())
+            .expect("PNG encoding failed");
         png_blobs.push(png_data);
     }
 
@@ -157,12 +151,31 @@ fn render_icon(size: u32) -> Vec<u8> {
     let glass_thickness = s * 0.04;
 
     // Glass fill (semi-transparent teal)
-    draw_filled_circle(&mut pixels, size, glass_cx, glass_cy, glass_r - glass_thickness,
-        60, 180, 200, 80);
+    draw_filled_circle(
+        &mut pixels,
+        size,
+        glass_cx,
+        glass_cy,
+        glass_r - glass_thickness,
+        60,
+        180,
+        200,
+        80,
+    );
 
     // Glass ring
-    draw_ring(&mut pixels, size, glass_cx, glass_cy, glass_r, glass_thickness,
-        80, 220, 240, 255);
+    draw_ring(
+        &mut pixels,
+        size,
+        glass_cx,
+        glass_cy,
+        glass_r,
+        glass_thickness,
+        80,
+        220,
+        240,
+        255,
+    );
 
     // Glass handle
     let handle_angle = std::f64::consts::FRAC_PI_4; // 45 degrees
@@ -171,8 +184,19 @@ fn render_icon(size: u32) -> Vec<u8> {
     let handle_len = s * 0.18;
     let handle_end_x = handle_start_x + handle_len * handle_angle.cos();
     let handle_end_y = handle_start_y + handle_len * handle_angle.sin();
-    draw_thick_line(&mut pixels, size, handle_start_x, handle_start_y,
-        handle_end_x, handle_end_y, glass_thickness * 1.2, 80, 220, 240, 255);
+    draw_thick_line(
+        &mut pixels,
+        size,
+        handle_start_x,
+        handle_start_y,
+        handle_end_x,
+        handle_end_y,
+        glass_thickness * 1.2,
+        80,
+        220,
+        240,
+        255,
+    );
 
     pixels
 }
@@ -203,16 +227,28 @@ fn set_pixel(pixels: &mut [u8], stride: u32, x: u32, y: u32, r: u8, g: u8, b: u8
         let dst_a = pixels[idx + 3] as f64 / 255.0;
         let out_a = src_a + dst_a * (1.0 - src_a);
         if out_a > 0.0 {
-            pixels[idx] = ((r as f64 * src_a + pixels[idx] as f64 * dst_a * (1.0 - src_a)) / out_a) as u8;
-            pixels[idx + 1] = ((g as f64 * src_a + pixels[idx + 1] as f64 * dst_a * (1.0 - src_a)) / out_a) as u8;
-            pixels[idx + 2] = ((b as f64 * src_a + pixels[idx + 2] as f64 * dst_a * (1.0 - src_a)) / out_a) as u8;
+            pixels[idx] =
+                ((r as f64 * src_a + pixels[idx] as f64 * dst_a * (1.0 - src_a)) / out_a) as u8;
+            pixels[idx + 1] =
+                ((g as f64 * src_a + pixels[idx + 1] as f64 * dst_a * (1.0 - src_a)) / out_a) as u8;
+            pixels[idx + 2] =
+                ((b as f64 * src_a + pixels[idx + 2] as f64 * dst_a * (1.0 - src_a)) / out_a) as u8;
             pixels[idx + 3] = (out_a * 255.0) as u8;
         }
     }
 }
 
-fn draw_filled_circle(pixels: &mut [u8], stride: u32, cx: f64, cy: f64, r: f64,
-    cr: u8, cg: u8, cb: u8, ca: u8) {
+fn draw_filled_circle(
+    pixels: &mut [u8],
+    stride: u32,
+    cx: f64,
+    cy: f64,
+    r: f64,
+    cr: u8,
+    cg: u8,
+    cb: u8,
+    ca: u8,
+) {
     let x0 = (cx - r - 1.0).max(0.0) as u32;
     let y0 = (cy - r - 1.0).max(0.0) as u32;
     let x1 = (cx + r + 1.0).min(stride as f64 - 1.0) as u32;
@@ -230,8 +266,18 @@ fn draw_filled_circle(pixels: &mut [u8], stride: u32, cx: f64, cy: f64, r: f64,
     }
 }
 
-fn draw_ring(pixels: &mut [u8], stride: u32, cx: f64, cy: f64, r: f64, thickness: f64,
-    cr: u8, cg: u8, cb: u8, ca: u8) {
+fn draw_ring(
+    pixels: &mut [u8],
+    stride: u32,
+    cx: f64,
+    cy: f64,
+    r: f64,
+    thickness: f64,
+    cr: u8,
+    cg: u8,
+    cb: u8,
+    ca: u8,
+) {
     let outer = r;
     let inner = r - thickness;
     let x0 = (cx - outer - 1.0).max(0.0) as u32;
@@ -253,12 +299,25 @@ fn draw_ring(pixels: &mut [u8], stride: u32, cx: f64, cy: f64, r: f64, thickness
     }
 }
 
-fn draw_thick_line(pixels: &mut [u8], stride: u32, x0: f64, y0: f64, x1: f64, y1: f64,
-    thickness: f64, cr: u8, cg: u8, cb: u8, ca: u8) {
+fn draw_thick_line(
+    pixels: &mut [u8],
+    stride: u32,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    thickness: f64,
+    cr: u8,
+    cg: u8,
+    cb: u8,
+    ca: u8,
+) {
     let dx = x1 - x0;
     let dy = y1 - y0;
     let len = (dx * dx + dy * dy).sqrt();
-    if len < 0.001 { return; }
+    if len < 0.001 {
+        return;
+    }
     let half_t = thickness / 2.0;
     let px_min = (x0.min(x1) - half_t - 1.0).max(0.0) as u32;
     let py_min = (y0.min(y1) - half_t - 1.0).max(0.0) as u32;

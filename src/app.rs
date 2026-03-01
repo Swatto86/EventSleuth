@@ -155,11 +155,7 @@ impl EventSleuthApp {
             Ok(ch) => ch,
             Err(e) => {
                 tracing::error!("Failed to enumerate channels: {}", e);
-                vec![
-                    "Application".into(),
-                    "System".into(),
-                    "Security".into(),
-                ]
+                vec!["Application".into(), "System".into(), "Security".into()]
             }
         };
 
@@ -229,7 +225,8 @@ impl EventSleuthApp {
                     app.selected_channels = ch;
                 }
             }
-            if let Some(presets) = eframe::get_value::<Vec<FilterPreset>>(storage, "filter_presets") {
+            if let Some(presets) = eframe::get_value::<Vec<FilterPreset>>(storage, "filter_presets")
+            {
                 app.filter_presets = presets;
             }
         }
@@ -305,8 +302,7 @@ impl EventSleuthApp {
         self.progress_channel.clear();
 
         // Create communication channel and cancellation flag
-        let (tx, rx) =
-            crossbeam_channel::bounded::<ReaderMessage>(constants::CHANNEL_BOUND);
+        let (tx, rx) = crossbeam_channel::bounded::<ReaderMessage>(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));
 
         // Spawn background reader thread
@@ -494,13 +490,14 @@ impl eframe::App for EventSleuthApp {
         // 4. Debounce: apply filter after FILTER_DEBOUNCE_MS of inactivity
         if let Some(timer) = self.debounce_timer {
             let debounce = std::time::Duration::from_millis(constants::FILTER_DEBOUNCE_MS);
-            if timer.elapsed() >= debounce {
+            let elapsed = timer.elapsed();
+            if elapsed >= debounce {
                 self.filter.parse_event_ids();
                 self.filter.parse_time_range();
                 self.needs_refilter = true;
                 self.debounce_timer = None;
             } else {
-                ctx.request_repaint_after(debounce);
+                ctx.request_repaint_after(debounce - elapsed);
             }
         }
 
@@ -517,7 +514,10 @@ impl eframe::App for EventSleuthApp {
         // 7. Live tail: periodic re-query for new events
         if self.live_tail && !self.is_loading {
             let should_tail = match self.last_tail_time {
-                Some(t) => t.elapsed() >= std::time::Duration::from_secs(constants::LIVE_TAIL_INTERVAL_SECS),
+                Some(t) => {
+                    t.elapsed()
+                        >= std::time::Duration::from_secs(constants::LIVE_TAIL_INTERVAL_SECS)
+                }
                 None => true,
             };
             if should_tail {
@@ -582,8 +582,10 @@ impl eframe::App for EventSleuthApp {
                                     .strong(),
                             );
                             ui.label(
-                                egui::RichText::new("Run EventSleuth as Administrator to view Security events.")
-                                    .color(crate::ui::theme::text_secondary(self.dark_mode)),
+                                egui::RichText::new(
+                                    "Run EventSleuth as Administrator to view Security events.",
+                                )
+                                .color(crate::ui::theme::text_secondary(self.dark_mode)),
                             );
                         });
                     });

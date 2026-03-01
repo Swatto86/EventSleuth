@@ -13,9 +13,9 @@ use std::time::Instant;
 use crossbeam_channel::Sender;
 use windows::core::PCWSTR;
 use windows::Win32::System::EventLog::{
-    EvtClose, EvtFormatMessage, EvtNext, EvtOpenPublisherMetadata, EvtQuery, EvtRender,
-    EvtFormatMessageEvent, EvtQueryChannelPath, EvtQueryFilePath, EvtQueryReverseDirection,
-    EvtRenderEventXml, EVT_HANDLE,
+    EvtClose, EvtFormatMessage, EvtFormatMessageEvent, EvtNext, EvtOpenPublisherMetadata, EvtQuery,
+    EvtQueryChannelPath, EvtQueryFilePath, EvtQueryReverseDirection, EvtRender, EvtRenderEventXml,
+    EVT_HANDLE,
 };
 
 use crate::core::event_record::EventRecord;
@@ -173,7 +173,15 @@ fn file_reader_thread_main(
     let path_str = file_path.to_string_lossy().into_owned();
     let flags = EvtQueryFilePath.0 | EvtQueryReverseDirection.0;
 
-    let total = match read_channel(&path_str, flags, time_from, time_to, &sender, &cancel, &mut publisher_cache) {
+    let total = match read_channel(
+        &path_str,
+        flags,
+        time_from,
+        time_to,
+        &sender,
+        &cancel,
+        &mut publisher_cache,
+    ) {
         Ok(count) => {
             let _ = sender.send(ReaderMessage::Progress {
                 count,
@@ -194,13 +202,20 @@ fn file_reader_thread_main(
     // Close cached publisher handles
     for (name, handle) in publisher_cache.drain() {
         if handle.0 != 0 {
-            unsafe { let _ = EvtClose(handle); }
+            unsafe {
+                let _ = EvtClose(handle);
+            }
             tracing::trace!("Closed publisher metadata for '{}'", name);
         }
     }
 
     let elapsed = start.elapsed();
-    tracing::info!("File reader complete: {} events from '{}' in {:.2}s", total, display_name, elapsed.as_secs_f64());
+    tracing::info!(
+        "File reader complete: {} events from '{}' in {:.2}s",
+        total,
+        display_name,
+        elapsed.as_secs_f64()
+    );
     let _ = sender.send(ReaderMessage::Complete { total, elapsed });
 }
 

@@ -52,16 +52,18 @@ impl EventSleuthApp {
 
         ui.separator();
 
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            match self.detail_tab {
-                DetailTab::Details => self.render_detail_formatted(ui, &event),
-                DetailTab::Xml => self.render_detail_xml(ui, &event),
-            }
+        egui::ScrollArea::vertical().show(ui, |ui| match self.detail_tab {
+            DetailTab::Details => self.render_detail_formatted(ui, &event),
+            DetailTab::Xml => self.render_detail_xml(ui, &event),
         });
     }
 
     /// Render the formatted details view: header fields, message, event data.
-    fn render_detail_formatted(&self, ui: &mut egui::Ui, event: &crate::core::event_record::EventRecord) {
+    fn render_detail_formatted(
+        &self,
+        ui: &mut egui::Ui,
+        event: &crate::core::event_record::EventRecord,
+    ) {
         let dark = self.dark_mode;
         let level_color = theme::level_color(event.level, dark);
 
@@ -120,7 +122,11 @@ impl EventSleuthApp {
         ui.add_space(8.0);
 
         // ── Message ─────────────────────────────────────────────────
-        ui.label(egui::RichText::new("💬 Message").color(theme::accent(dark)).strong());
+        ui.label(
+            egui::RichText::new("💬 Message")
+                .color(theme::accent(dark))
+                .strong(),
+        );
         ui.separator();
 
         let msg = event.display_message();
@@ -168,19 +174,28 @@ impl EventSleuthApp {
                 .spacing([12.0, 4.0])
                 .show(ui, |ui| {
                     // Header row
-                    ui.label(egui::RichText::new("Name").color(theme::text_dim(dark)).strong());
-                    ui.label(egui::RichText::new("Value").color(theme::text_dim(dark)).strong());
+                    ui.label(
+                        egui::RichText::new("Name")
+                            .color(theme::text_dim(dark))
+                            .strong(),
+                    );
+                    ui.label(
+                        egui::RichText::new("Value")
+                            .color(theme::text_dim(dark))
+                            .strong(),
+                    );
                     ui.end_row();
 
                     for (key, value) in &event.event_data {
                         ui.label(egui::RichText::new(key).color(theme::text_secondary(dark)));
                         // Wrap long values (char-safe truncation)
                         let display = if value.chars().count() > 500 {
-                            let end = value.char_indices()
+                            let end = value
+                                .char_indices()
                                 .nth(500)
                                 .map(|(i, _)| i)
                                 .unwrap_or(value.len());
-                            format!("{}... ({} chars)", &value[..end], value.len())
+                            format!("{}... ({} chars)", &value[..end], value.chars().count())
                         } else {
                             value.clone()
                         };
@@ -245,14 +260,22 @@ impl EventSleuthApp {
         dark: bool,
     ) -> egui::text::LayoutJob {
         use egui::text::{LayoutJob, LayoutSection};
-        use egui::{FontId, FontFamily, TextFormat};
+        use egui::{FontFamily, FontId, TextFormat};
 
-        let family = if monospace { FontFamily::Monospace } else { FontFamily::Proportional };
+        let family = if monospace {
+            FontFamily::Monospace
+        } else {
+            FontFamily::Proportional
+        };
         let font_id = FontId::new(font_size, family);
 
         let normal_fmt = TextFormat {
             font_id: font_id.clone(),
-            color: if monospace { theme::text_secondary(dark) } else { theme::text_primary(dark) },
+            color: if monospace {
+                theme::text_secondary(dark)
+            } else {
+                theme::text_primary(dark)
+            },
             ..Default::default()
         };
 
@@ -277,53 +300,94 @@ impl EventSleuthApp {
         }
 
         // Find all match positions
-        let text_lower;
-        let search_lower;
-        let (haystack, needle) = if case_sensitive {
-            (text, search)
-        } else {
-            text_lower = text.to_lowercase();
-            search_lower = search.to_lowercase();
-            (text_lower.as_str(), search_lower.as_str())
-        };
-
-        let mut pos = 0usize;
-        let needle_len = needle.len();
-
-        loop {
-            match haystack[pos..].find(needle) {
-                Some(rel_start) => {
-                    let abs_start = pos + rel_start;
-                    // Non-matching prefix
-                    if abs_start > pos {
-                        // Map lowercase byte positions back to original text byte positions
-                        // Since to_lowercase() can change byte lengths for some unicode,
-                        // we use the original text positions directly. For ASCII-safe search
-                        // terms the byte positions in lowercase == positions in original.
+        if case_sensitive {
+            // Case-sensitive: byte positions in the original text are
+            // used directly -- no mapping needed.
+            let needle_len = search.len();
+            let mut pos = 0usize;
+            loop {
+                match text[pos..].find(search) {
+                    Some(rel_start) => {
+                        let abs_start = pos + rel_start;
+                        if abs_start > pos {
+                            job.sections.push(LayoutSection {
+                                leading_space: 0.0,
+                                byte_range: pos..abs_start,
+                                format: normal_fmt.clone(),
+                            });
+                        }
                         job.sections.push(LayoutSection {
                             leading_space: 0.0,
-                            byte_range: pos..abs_start,
-                            format: normal_fmt.clone(),
+                            byte_range: abs_start..abs_start + needle_len,
+                            format: highlight_fmt.clone(),
                         });
+                        pos = abs_start + needle_len;
                     }
-                    // Matched segment
-                    job.sections.push(LayoutSection {
-                        leading_space: 0.0,
-                        byte_range: abs_start..abs_start + needle_len,
-                        format: highlight_fmt.clone(),
-                    });
-                    pos = abs_start + needle_len;
+                    None => {
+                        if pos < text.len() {
+                            job.sections.push(LayoutSection {
+                                leading_space: 0.0,
+                                byte_range: pos..text.len(),
+                                format: normal_fmt.clone(),
+                            });
+                        }
+                        break;
+                    }
                 }
-                None => {
-                    // Trailing non-matching text
-                    if pos < text.len() {
+            }
+        } else {
+            // Case-insensitive: build a byte-position mapping from the
+            // lowered text back to the original text.  `to_lowercase()`
+            // can change byte lengths for certain Unicode code-points
+            // (e.g. U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE), so
+            // raw lowered-text byte offsets are NOT valid for `job.text`
+            // which contains the original (un-lowered) text.
+            let search_lower = search.to_lowercase();
+            let mut lowered = String::with_capacity(text.len());
+            let mut low_to_orig: Vec<usize> = Vec::with_capacity(text.len() + 1);
+            let mut orig_pos = 0usize;
+            for ch in text.chars() {
+                let orig_len = ch.len_utf8();
+                for lc in ch.to_lowercase() {
+                    for _ in 0..lc.len_utf8() {
+                        low_to_orig.push(orig_pos);
+                    }
+                    lowered.push(lc);
+                }
+                orig_pos += orig_len;
+            }
+            low_to_orig.push(orig_pos); // sentinel for end-of-string
+
+            let needle_len = search_lower.len();
+            let mut pos = 0usize;
+            loop {
+                match lowered[pos..].find(search_lower.as_str()) {
+                    Some(rel_start) => {
+                        let abs_start = pos + rel_start;
+                        if abs_start > pos {
+                            job.sections.push(LayoutSection {
+                                leading_space: 0.0,
+                                byte_range: low_to_orig[pos]..low_to_orig[abs_start],
+                                format: normal_fmt.clone(),
+                            });
+                        }
                         job.sections.push(LayoutSection {
                             leading_space: 0.0,
-                            byte_range: pos..text.len(),
-                            format: normal_fmt.clone(),
+                            byte_range: low_to_orig[abs_start]..low_to_orig[abs_start + needle_len],
+                            format: highlight_fmt.clone(),
                         });
+                        pos = abs_start + needle_len;
                     }
-                    break;
+                    None => {
+                        if pos < lowered.len() {
+                            job.sections.push(LayoutSection {
+                                leading_space: 0.0,
+                                byte_range: low_to_orig[pos]..text.len(),
+                                format: normal_fmt.clone(),
+                            });
+                        }
+                        break;
+                    }
                 }
             }
         }

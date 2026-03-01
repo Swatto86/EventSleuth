@@ -19,7 +19,15 @@ pub fn export_csv(events: &[EventRecord], path: &Path) -> Result<(), EventSleuth
 
     // Write header row
     writer
-        .write_record(["Timestamp", "Level", "EventID", "Provider", "Computer", "Channel", "Message"])
+        .write_record([
+            "Timestamp",
+            "Level",
+            "EventID",
+            "Provider",
+            "Computer",
+            "Channel",
+            "Message",
+        ])
         .map_err(|e| EventSleuthError::Export(format!("Failed to write CSV header: {e}")))?;
 
     // Write each event as a row

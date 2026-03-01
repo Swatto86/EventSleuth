@@ -32,7 +32,11 @@ impl EventSleuthApp {
                             if ui.button(&preset.name).clicked() {
                                 load_idx = Some(i);
                             }
-                            if ui.small_button("🗑").on_hover_text("Delete this preset").clicked() {
+                            if ui
+                                .small_button("🗑")
+                                .on_hover_text("Delete this preset")
+                                .clicked()
+                            {
                                 delete_idx = Some(i);
                             }
                         });
@@ -77,7 +81,14 @@ impl EventSleuthApp {
 
         // ── Severity levels ─────────────────────────────────────────
         ui.label("📊 Level");
-        let level_names = ["⚙️ LogAlways", "🔴 Critical", "🟠 Error", "🟡 Warning", "🔵 Info", "⚪ Verbose"];
+        let level_names = [
+            "⚙️ LogAlways",
+            "🔴 Critical",
+            "🟠 Error",
+            "🟡 Warning",
+            "🔵 Info",
+            "⚪ Verbose",
+        ];
         let level_colors = theme::level_colors(dark);
         for i in 0..=5 {
             let label = egui::RichText::new(level_names[i]).color(level_colors[i]);
@@ -111,7 +122,12 @@ impl EventSleuthApp {
             text_changed = true;
         }
         search_response.on_hover_text("Full-text search across all event fields:\nMessage, Provider, Event ID, Event Data, etc.\nUse the checkbox below for case-sensitive matching.");
-        ui.checkbox(&mut self.filter.case_sensitive, "Case sensitive");
+        if ui
+            .checkbox(&mut self.filter.case_sensitive, "Case sensitive")
+            .changed()
+        {
+            changed = true;
+        }
         ui.add_space(4.0);
 
         // ── Time range ──────────────────────────────────────────────

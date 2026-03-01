@@ -20,6 +20,14 @@ impl EventSleuthApp {
     /// Runs on a background thread and sends a completion message back
     /// via `export_rx` so the UI can display feedback.
     pub fn export_csv(&mut self) {
+        if self.export_rx.is_some() {
+            self.export_message = Some((
+                "Export already in progress".into(),
+                std::time::Instant::now(),
+            ));
+            return;
+        }
+
         let events = self.filtered_event_list();
         if events.is_empty() {
             self.export_message = Some(("No events to export".into(), std::time::Instant::now()));
@@ -37,10 +45,7 @@ impl EventSleuthApp {
             {
                 match crate::export::csv_export::export_csv(&events, &path) {
                     Ok(()) => {
-                        let _ = tx.send(format!(
-                            "Exported {} events to CSV",
-                            events.len()
-                        ));
+                        let _ = tx.send(format!("Exported {} events to CSV", events.len()));
                     }
                     Err(e) => {
                         tracing::error!("CSV export failed: {}", e);
@@ -56,6 +61,14 @@ impl EventSleuthApp {
     /// Runs on a background thread and sends a completion message back
     /// via `export_rx` so the UI can display feedback.
     pub fn export_json(&mut self) {
+        if self.export_rx.is_some() {
+            self.export_message = Some((
+                "Export already in progress".into(),
+                std::time::Instant::now(),
+            ));
+            return;
+        }
+
         let events = self.filtered_event_list();
         if events.is_empty() {
             self.export_message = Some(("No events to export".into(), std::time::Instant::now()));
@@ -73,10 +86,7 @@ impl EventSleuthApp {
             {
                 match crate::export::json_export::export_json(&events, &path) {
                     Ok(()) => {
-                        let _ = tx.send(format!(
-                            "Exported {} events to JSON",
-                            events.len()
-                        ));
+                        let _ = tx.send(format!("Exported {} events to JSON", events.len()));
                     }
                     Err(e) => {
                         tracing::error!("JSON export failed: {}", e);
@@ -354,9 +364,11 @@ impl EventSleuthApp {
             if let Some(existing) = self.filter_presets.iter_mut().find(|p| p.name == name) {
                 *existing = crate::core::filter::FilterPreset::from_state(&name, &self.filter);
             } else {
-                self.filter_presets.push(
-                    crate::core::filter::FilterPreset::from_state(&name, &self.filter),
-                );
+                self.filter_presets
+                    .push(crate::core::filter::FilterPreset::from_state(
+                        &name,
+                        &self.filter,
+                    ));
             }
             self.preset_name_input.clear();
             self.show_save_preset = false;

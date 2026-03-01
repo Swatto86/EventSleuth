@@ -38,16 +38,16 @@ fn acquire_single_instance() -> Option<SingleInstanceGuard> {
     use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
     use windows::Win32::System::Threading::CreateMutexW;
 
-    let handle = unsafe {
-        CreateMutexW(None, true, w!("Global\\EventSleuth_SingleInstance"))
-    };
+    let handle = unsafe { CreateMutexW(None, true, w!("Global\\EventSleuth_SingleInstance")) };
 
     match handle {
         Ok(h) => {
             // Check if the mutex already existed (another instance owns it)
             let last_err = unsafe { windows::Win32::Foundation::GetLastError() };
             if last_err == ERROR_ALREADY_EXISTS {
-                unsafe { let _ = windows::Win32::Foundation::CloseHandle(h); }
+                unsafe {
+                    let _ = windows::Win32::Foundation::CloseHandle(h);
+                }
                 None
             } else {
                 Some(SingleInstanceGuard { _handle: h })
@@ -64,7 +64,7 @@ fn main() -> eframe::Result<()> {
         None => {
             // Another instance is already running — show a message box and exit
             use windows::core::w;
-            use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK, MB_ICONINFORMATION};
+            use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
             unsafe {
                 MessageBoxW(
                     None,
@@ -152,8 +152,16 @@ fn load_app_icon() -> Option<std::sync::Arc<egui::IconData>> {
             break;
         }
         // Width/height: 0 means 256
-        let w = if ICO_BYTES[offset] == 0 { 256u32 } else { ICO_BYTES[offset] as u32 };
-        let h = if ICO_BYTES[offset + 1] == 0 { 256u32 } else { ICO_BYTES[offset + 1] as u32 };
+        let w = if ICO_BYTES[offset] == 0 {
+            256u32
+        } else {
+            ICO_BYTES[offset] as u32
+        };
+        let h = if ICO_BYTES[offset + 1] == 0 {
+            256u32
+        } else {
+            ICO_BYTES[offset + 1] as u32
+        };
         if w * h > best_size {
             best_size = w * h;
             best_idx = i;

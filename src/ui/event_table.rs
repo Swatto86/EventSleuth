@@ -100,7 +100,8 @@ impl EventSleuthApp {
                         let msg = event.display_message();
                         // Truncate long messages for the table view (char-safe)
                         let display = if msg.chars().count() > 200 {
-                            let end = msg.char_indices()
+                            let end = msg
+                                .char_indices()
                                 .nth(200)
                                 .map(|(i, _)| i)
                                 .unwrap_or(msg.len());
@@ -126,7 +127,11 @@ impl EventSleuthApp {
     fn render_sort_header(&mut self, ui: &mut egui::Ui, column: SortColumn, label: &str) {
         let is_current = self.sort_column == column;
         let arrow = if is_current {
-            if self.sort_ascending { " ▲" } else { " ▼" }
+            if self.sort_ascending {
+                " ▲"
+            } else {
+                " ▼"
+            }
         } else {
             ""
         };
@@ -134,7 +139,9 @@ impl EventSleuthApp {
         let text = format!("{label}{arrow}");
         let dark = self.dark_mode;
         let rich = if is_current {
-            egui::RichText::new(text).color(theme::accent(dark)).strong()
+            egui::RichText::new(text)
+                .color(theme::accent(dark))
+                .strong()
         } else {
             egui::RichText::new(text).color(theme::text_primary(dark))
         };

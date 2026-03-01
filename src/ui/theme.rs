@@ -39,50 +39,74 @@ pub const BG_PANEL_LIGHT: Color32 = Color32::from_rgb(240, 240, 244);
 
 /// Primary text colour — high-contrast body text.
 pub fn text_primary(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(205, 205, 215) }
-    else { Color32::from_rgb(40, 40, 50) }
+    if dark {
+        Color32::from_rgb(205, 205, 215)
+    } else {
+        Color32::from_rgb(40, 40, 50)
+    }
 }
 
 /// Secondary / muted text — timestamps, providers, labels.
 pub fn text_secondary(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(140, 140, 160) }
-    else { Color32::from_rgb(80, 80, 100) }
+    if dark {
+        Color32::from_rgb(140, 140, 160)
+    } else {
+        Color32::from_rgb(80, 80, 100)
+    }
 }
 
 /// Dim text — hints, placeholders, field names.
 pub fn text_dim(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(100, 100, 120) }
-    else { Color32::from_rgb(120, 120, 138) }
+    if dark {
+        Color32::from_rgb(100, 100, 120)
+    } else {
+        Color32::from_rgb(120, 120, 138)
+    }
 }
 
 /// Primary accent (teal) — headings, active sort headers, branding.
 pub fn accent(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(80, 200, 220) }
-    else { Color32::from_rgb(0, 125, 150) }
+    if dark {
+        Color32::from_rgb(80, 200, 220)
+    } else {
+        Color32::from_rgb(0, 125, 150)
+    }
 }
 
 /// Dimmer accent — secondary highlights, "Ready" text.
 pub fn accent_dim(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(60, 150, 170) }
-    else { Color32::from_rgb(50, 115, 135) }
+    if dark {
+        Color32::from_rgb(60, 150, 170)
+    } else {
+        Color32::from_rgb(50, 115, 135)
+    }
 }
 
 /// Background colour for search-match highlighting.
 pub fn highlight_bg(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(120, 90, 0) }
-    else { Color32::from_rgb(255, 225, 80) }
+    if dark {
+        Color32::from_rgb(120, 90, 0)
+    } else {
+        Color32::from_rgb(255, 225, 80)
+    }
 }
 
 /// Text colour for search-match highlighted segments.
 pub fn highlight_text(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(255, 255, 255) }
-    else { Color32::from_rgb(30, 20, 0) }
+    if dark {
+        Color32::from_rgb(255, 255, 255)
+    } else {
+        Color32::from_rgb(30, 20, 0)
+    }
 }
 
 /// Security-banner background fill.
 pub fn security_banner_bg(dark: bool) -> Color32 {
-    if dark { Color32::from_rgb(60, 40, 10) }
-    else { Color32::from_rgb(255, 245, 220) }
+    if dark {
+        Color32::from_rgb(60, 40, 10)
+    } else {
+        Color32::from_rgb(255, 245, 220)
+    }
 }
 
 /// Return the colour associated with a numeric severity level.
@@ -93,20 +117,20 @@ pub fn level_color(level: u8, dark: bool) -> Color32 {
     if dark {
         match level {
             1 => Color32::from_rgb(255, 68, 68),   // Critical — bright red
-            2 => Color32::from_rgb(224, 108, 96),   // Error — red-orange
-            3 => Color32::from_rgb(224, 168, 64),   // Warning — amber
-            4 => Color32::from_rgb(122, 162, 212),   // Info — blue-grey
-            5 => Color32::from_rgb(136, 136, 136),   // Verbose — dim grey
-            _ => Color32::from_rgb(170, 170, 170),   // Default
+            2 => Color32::from_rgb(224, 108, 96),  // Error — red-orange
+            3 => Color32::from_rgb(224, 168, 64),  // Warning — amber
+            4 => Color32::from_rgb(122, 162, 212), // Info — blue-grey
+            5 => Color32::from_rgb(136, 136, 136), // Verbose — dim grey
+            _ => Color32::from_rgb(170, 170, 170), // Default
         }
     } else {
         match level {
-            1 => Color32::from_rgb(185, 20, 20),    // Critical — dark red
-            2 => Color32::from_rgb(175, 55, 40),    // Error — dark red-orange
-            3 => Color32::from_rgb(155, 105, 0),    // Warning — dark amber
-            4 => Color32::from_rgb(35, 90, 155),    // Info — dark blue
-            5 => Color32::from_rgb(105, 105, 105),   // Verbose — medium grey
-            _ => Color32::from_rgb(115, 115, 115),   // Default
+            1 => Color32::from_rgb(185, 20, 20),   // Critical — dark red
+            2 => Color32::from_rgb(175, 55, 40),   // Error — dark red-orange
+            3 => Color32::from_rgb(155, 105, 0),   // Warning — dark amber
+            4 => Color32::from_rgb(35, 90, 155),   // Info — dark blue
+            5 => Color32::from_rgb(105, 105, 105), // Verbose — medium grey
+            _ => Color32::from_rgb(115, 115, 115), // Default
         }
     }
 }

@@ -48,7 +48,8 @@ impl EventSleuthApp {
                 // Show export feedback briefly
                 ui.label(egui::RichText::new(msg.as_str()).color(theme::accent(dark)));
             } else if self.live_tail {
-                let since = self.last_tail_time
+                let since = self
+                    .last_tail_time
                     .map(|t| format!("{}s ago", t.elapsed().as_secs()))
                     .unwrap_or_else(|| "starting".into());
                 ui.label(

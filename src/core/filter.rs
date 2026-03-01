@@ -100,6 +100,10 @@ pub struct FilterState {
     /// event data values, and raw XML.
     pub text_search: String,
 
+    /// Pre-computed lowercase version of `text_search` for efficient
+    /// case-insensitive matching. Updated by [`parse_event_ids`].
+    pub text_search_lower: String,
+
     /// Start of time range filter. `None` = no lower bound.
     pub time_from_input: String,
 
@@ -126,6 +130,7 @@ impl Default for FilterState {
             levels: [true; 6],
             provider_filter: String::new(),
             text_search: String::new(),
+            text_search_lower: String::new(),
             time_from_input: String::new(),
             time_to_input: String::new(),
             time_from: None,
@@ -189,6 +194,9 @@ impl FilterState {
                 }
             }
         }
+
+        // Update cached lowercase text search for case-insensitive matching
+        self.text_search_lower = self.text_search.to_lowercase();
     }
 
     /// Re-parse the time range input strings into `time_from` / `time_to`.
@@ -280,24 +288,27 @@ impl FilterState {
     }
 
     /// Case-insensitive text search across event fields.
+    ///
+    /// Uses `text_search_lower` (cached by `parse_event_ids`) to avoid
+    /// re-allocating the lowered search term once per event.
     fn text_search_case_insensitive(&self, event: &EventRecord) -> bool {
-        let q = self.text_search.to_lowercase();
-        if event.message.to_lowercase().contains(&q) {
+        let q = self.text_search_lower.as_str();
+        if event.message.to_lowercase().contains(q) {
             return true;
         }
-        if event.provider_name.to_lowercase().contains(&q) {
+        if event.provider_name.to_lowercase().contains(q) {
             return true;
         }
-        if event.channel.to_lowercase().contains(&q) {
+        if event.channel.to_lowercase().contains(q) {
             return true;
         }
         for (k, v) in &event.event_data {
-            if k.to_lowercase().contains(&q) || v.to_lowercase().contains(&q) {
+            if k.to_lowercase().contains(q) || v.to_lowercase().contains(q) {
                 return true;
             }
         }
         // raw_xml search is expensive, do it last
-        if event.raw_xml.to_lowercase().contains(&q) {
+        if event.raw_xml.to_lowercase().contains(q) {
             return true;
         }
         false
@@ -330,9 +341,7 @@ impl FilterState {
 
     /// Apply a "Today" preset: from midnight local time today to now.
     pub fn apply_today_preset(&mut self) {
-        let today_local = chrono::Local::now()
-            .date_naive()
-            .and_hms_opt(0, 0, 0);
+        let today_local = chrono::Local::now().date_naive().and_hms_opt(0, 0, 0);
         if let Some(naive) = today_local {
             use chrono::TimeZone;
             if let Some(local_dt) = chrono::Local.from_local_datetime(&naive).earliest() {
@@ -425,6 +434,7 @@ mod tests {
     fn test_text_search_case_insensitive() {
         let mut f = FilterState::default();
         f.text_search = "explorer".into();
+        f.parse_event_ids(); // updates text_search_lower cache
         assert!(f.matches(&make_event(1, 4, "P", "Explorer.exe crashed")));
         assert!(!f.matches(&make_event(1, 4, "P", "Nothing here")));
     }
