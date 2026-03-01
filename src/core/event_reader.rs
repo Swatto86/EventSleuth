@@ -13,11 +13,11 @@ use std::time::Instant;
 use crossbeam_channel::Sender;
 use windows::core::PCWSTR;
 use windows::Win32::System::EventLog::{
-    EvtClose, EvtFormatMessage, EvtFormatMessageEvent, EvtNext, EvtOpenPublisherMetadata, EvtQuery,
-    EvtQueryChannelPath, EvtQueryFilePath, EvtQueryReverseDirection, EvtRender, EvtRenderEventXml,
+    EvtClose, EvtNext, EvtQuery, EvtQueryChannelPath, EvtQueryFilePath, EvtQueryReverseDirection,
     EVT_HANDLE,
 };
 
+use super::event_format::{render_event_xml, try_format_message};
 use crate::core::event_record::EventRecord;
 use crate::core::xml_parser::parse_event_xml;
 use crate::util::constants::*;
@@ -50,17 +50,19 @@ pub enum ReaderMessage {
 /// - `time_from` / `time_to`: Optional time bounds pushed into the XPath query
 /// - `sender`: Channel sender for [`ReaderMessage`] batches
 /// - `cancel`: Shared flag to signal cancellation
+/// - `max_events`: Maximum events per channel before stopping
 pub fn spawn_reader_thread(
     channels: Vec<String>,
     time_from: Option<chrono::DateTime<chrono::Utc>>,
     time_to: Option<chrono::DateTime<chrono::Utc>>,
     sender: Sender<ReaderMessage>,
     cancel: Arc<AtomicBool>,
+    max_events: usize,
 ) -> std::thread::JoinHandle<()> {
     std::thread::Builder::new()
         .name("event-reader".into())
         .spawn(move || {
-            reader_thread_main(channels, time_from, time_to, sender, cancel);
+            reader_thread_main(channels, time_from, time_to, sender, cancel, max_events);
         })
         .expect("Failed to spawn event reader thread")
 }
@@ -75,11 +77,12 @@ pub fn spawn_file_reader_thread(
     time_to: Option<chrono::DateTime<chrono::Utc>>,
     sender: Sender<ReaderMessage>,
     cancel: Arc<AtomicBool>,
+    max_events: usize,
 ) -> std::thread::JoinHandle<()> {
     std::thread::Builder::new()
         .name("evtx-reader".into())
         .spawn(move || {
-            file_reader_thread_main(file_path, time_from, time_to, sender, cancel);
+            file_reader_thread_main(file_path, time_from, time_to, sender, cancel, max_events);
         })
         .expect("Failed to spawn .evtx file reader thread")
 }
@@ -92,6 +95,7 @@ fn reader_thread_main(
     time_to: Option<chrono::DateTime<chrono::Utc>>,
     sender: Sender<ReaderMessage>,
     cancel: Arc<AtomicBool>,
+    max_events: usize,
 ) {
     let start = Instant::now();
     let mut total = 0usize;
@@ -114,6 +118,7 @@ fn reader_thread_main(
             &sender,
             &cancel,
             &mut publisher_cache,
+            max_events,
         ) {
             Ok(count) => {
                 total += count;
@@ -161,6 +166,7 @@ fn file_reader_thread_main(
     time_to: Option<chrono::DateTime<chrono::Utc>>,
     sender: Sender<ReaderMessage>,
     cancel: Arc<AtomicBool>,
+    max_events: usize,
 ) {
     let start = Instant::now();
     let mut publisher_cache: HashMap<String, EVT_HANDLE> = HashMap::new();
@@ -181,6 +187,7 @@ fn file_reader_thread_main(
         &sender,
         &cancel,
         &mut publisher_cache,
+        max_events,
     ) {
         Ok(count) => {
             let _ = sender.send(ReaderMessage::Progress {
@@ -224,6 +231,7 @@ fn file_reader_thread_main(
 /// Returns the number of events successfully read from this channel.
 /// The `query_flags` parameter controls whether this is a live channel
 /// query (`EvtQueryChannelPath`) or a file query (`EvtQueryFilePath`).
+#[allow(clippy::too_many_arguments)]
 fn read_channel(
     channel: &str,
     query_flags: u32,
@@ -232,6 +240,7 @@ fn read_channel(
     sender: &Sender<ReaderMessage>,
     cancel: &Arc<AtomicBool>,
     publisher_cache: &mut HashMap<String, EVT_HANDLE>,
+    max_events: usize,
 ) -> Result<usize, EventSleuthError> {
     let xpath = build_xpath_query(time_from, time_to);
     let channel_wide = to_wide(channel);
@@ -267,13 +276,9 @@ fn read_channel(
             break;
         }
 
-        // Safety limit: don't load more than MAX_EVENTS_PER_CHANNEL
-        if count >= MAX_EVENTS_PER_CHANNEL {
-            tracing::info!(
-                "Hit event limit ({}) for channel '{}'",
-                MAX_EVENTS_PER_CHANNEL,
-                channel
-            );
+        // Safety limit: don't load more than max_events
+        if count >= max_events {
+            tracing::info!("Hit event limit ({}) for channel '{}'", max_events, channel);
             break;
         }
 
@@ -364,178 +369,6 @@ fn read_channel(
     Ok(count)
 }
 
-/// Render a single event handle to an XML string via `EvtRender`.
-///
-/// Uses a caller-provided reusable buffer to avoid per-event heap allocation.
-/// The buffer grows if needed and retains its size for subsequent calls.
-fn render_event_xml(
-    event_handle: isize,
-    buffer: &mut Vec<u16>,
-) -> Result<String, EventSleuthError> {
-    // Ensure minimum capacity; the buffer is reused across events.
-    if buffer.len() < EVT_RENDER_BUFFER_SIZE {
-        buffer.resize(EVT_RENDER_BUFFER_SIZE, 0);
-    }
-    let mut buffer_used = 0u32;
-    let mut property_count = 0u32;
-
-    // SAFETY: event_handle is valid, buffer is properly sized.
-    // EvtRenderEventXml renders the event as a null-terminated UTF-16 string.
-    let result = unsafe {
-        EvtRender(
-            None,
-            EVT_HANDLE(event_handle),
-            EvtRenderEventXml.0,
-            (buffer.len() * 2) as u32,
-            Some(buffer.as_mut_ptr() as *mut _),
-            &mut buffer_used,
-            &mut property_count,
-        )
-    };
-
-    if let Err(e) = result {
-        let code = e.code().0 as u32;
-        // ERROR_INSUFFICIENT_BUFFER (122) — grow and retry
-        if code == 122 || code == 0x8007007A {
-            let needed = (buffer_used as usize / 2) + 1;
-            buffer.resize(needed, 0);
-            // SAFETY: retrying with larger buffer
-            unsafe {
-                EvtRender(
-                    None,
-                    EVT_HANDLE(event_handle),
-                    EvtRenderEventXml.0,
-                    (buffer.len() * 2) as u32,
-                    Some(buffer.as_mut_ptr() as *mut _),
-                    &mut buffer_used,
-                    &mut property_count,
-                )
-            }
-            .map_err(|e| EventSleuthError::WindowsApi {
-                hr: e.code().0 as u32,
-                context: "EvtRender retry".into(),
-            })?;
-        } else {
-            return Err(EventSleuthError::WindowsApi {
-                hr: code,
-                context: "EvtRender".into(),
-            });
-        }
-    }
-
-    // Convert UTF-16 to String. buffer_used is in bytes.
-    let used_u16 = buffer_used as usize / 2;
-    let end = if used_u16 > 0 && buffer[used_u16 - 1] == 0 {
-        used_u16 - 1 // strip null terminator
-    } else {
-        used_u16
-    };
-
-    Ok(String::from_utf16_lossy(&buffer[..end]))
-}
-
-/// Attempt to format the event message via `EvtFormatMessage`.
-///
-/// Returns `Some(message)` on success, `None` if formatting fails (common
-/// for events from uninstalled providers). Caches publisher metadata handles
-/// in `publisher_cache`. Uses a caller-provided reusable buffer to avoid
-/// per-event heap allocation.
-fn try_format_message(
-    event_handle: isize,
-    xml: &str,
-    publisher_cache: &mut HashMap<String, EVT_HANDLE>,
-    buffer: &mut Vec<u16>,
-) -> Option<String> {
-    // Extract provider name from XML to look up publisher metadata.
-    // A lightweight extraction to avoid full XML parse just for the name.
-    let provider = extract_provider_name(xml)?;
-
-    // Check cache — a cached value of 0 means we already failed for this provider.
-    let pub_handle = match publisher_cache.get(&provider) {
-        Some(&h) if h.0 != 0 => h,
-        Some(_) => return None, // Known failure
-        None => {
-            // Open publisher metadata and cache the result
-            let provider_wide = to_wide(&provider);
-            // SAFETY: provider_wide is a valid null-terminated UTF-16 string.
-            let result = unsafe {
-                EvtOpenPublisherMetadata(None, PCWSTR(provider_wide.as_ptr()), None, 0, 0)
-            };
-            match result {
-                Ok(h) => {
-                    publisher_cache.insert(provider.clone(), h);
-                    h
-                }
-                Err(_) => {
-                    publisher_cache.insert(provider.clone(), EVT_HANDLE(0));
-                    return None;
-                }
-            }
-        }
-    };
-
-    // Format the message (reuse caller-provided buffer)
-    if buffer.len() < EVT_FORMAT_BUFFER_SIZE {
-        buffer.resize(EVT_FORMAT_BUFFER_SIZE, 0);
-    }
-    let mut used = 0u32;
-
-    // SAFETY: pub_handle and event_handle are valid handles.
-    // EvtFormatMessageEvent formats the event's primary message string.
-    let result = unsafe {
-        EvtFormatMessage(
-            pub_handle,
-            EVT_HANDLE(event_handle),
-            0,
-            None,
-            EvtFormatMessageEvent.0,
-            Some(buffer.as_mut_slice()),
-            &mut used,
-        )
-    };
-
-    match result {
-        Ok(()) => {
-            let end = if used > 0 { used as usize - 1 } else { 0 };
-            let msg = String::from_utf16_lossy(&buffer[..end]);
-            let trimmed = msg.trim().to_string();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed)
-            }
-        }
-        Err(e) => {
-            let code = e.code().0 as u32;
-            // ERROR_INSUFFICIENT_BUFFER — retry with larger buffer
-            if code == 122 || code == 0x8007007A {
-                buffer.resize(used as usize + 1, 0);
-                // SAFETY: retrying with larger buffer
-                let retry = unsafe {
-                    EvtFormatMessage(
-                        pub_handle,
-                        EVT_HANDLE(event_handle),
-                        0,
-                        None,
-                        EvtFormatMessageEvent.0,
-                        Some(buffer.as_mut_slice()),
-                        &mut used,
-                    )
-                };
-                if retry.is_ok() {
-                    let end = if used > 0 { used as usize - 1 } else { 0 };
-                    let msg = String::from_utf16_lossy(&buffer[..end]);
-                    let trimmed = msg.trim().to_string();
-                    if !trimmed.is_empty() {
-                        return Some(trimmed);
-                    }
-                }
-            }
-            None
-        }
-    }
-}
-
 /// Build an XPath query string for server-side pre-filtering.
 ///
 /// Pushes time range predicates into the XPath to reduce the volume of
@@ -570,7 +403,7 @@ fn build_xpath_query(
 ///
 /// Avoids a full XML parse just to get the provider name for publisher
 /// metadata lookup. Looks for `Provider Name="..."` in the string.
-fn extract_provider_name(xml: &str) -> Option<String> {
+pub(super) fn extract_provider_name(xml: &str) -> Option<String> {
     let marker = "Provider Name=\"";
     let start = xml.find(marker)? + marker.len();
     let end = xml[start..].find('"')? + start;
@@ -578,7 +411,7 @@ fn extract_provider_name(xml: &str) -> Option<String> {
 }
 
 /// Convert a `&str` to a null-terminated UTF-16 vector.
-fn to_wide(s: &str) -> Vec<u16> {
+pub(super) fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 

@@ -9,6 +9,7 @@
 // Declare crate modules
 mod app;
 mod app_actions;
+mod app_update;
 mod core;
 mod export;
 mod ui;

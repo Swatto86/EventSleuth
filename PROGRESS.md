@@ -1,12 +1,12 @@
 # EventSleuth — Progress Tracker
 
-> Last updated: 2026-03-01
+> Last updated: 2026-03-02
 
 ## Build Status
 
 - **Debug build:** ✅ Compiles — zero errors, zero warnings
 - **Release build:** ✅ Compiles — optimised, LTO, stripped symbols
-- **Unit tests:** ✅ 18/18 passing
+- **Unit tests:** ✅ 26/26 passing
 - **App launches:** ✅ GUI window opens, events load from Application/System sources
 - **CI/CD:** ✅ GitHub Actions workflow for automated release builds
 - **Single instance:** ✅ Named mutex prevents duplicate instances
@@ -39,7 +39,7 @@ Tracking against [EventSleuth-Specification.md](EventSleuth-Specification.md).
 | 15 | Colour-coded severity levels | ✅ Done | `ui/theme.rs` — Critical/Error/Warning/Info/Verbose each have distinct colours |
 | 16 | Graceful handling of access denied (Security log) | ✅ Done | Error shown in status bar, other sources continue |
 | 17 | Comprehensive error handling — no panics | ✅ Done | `thiserror` enum, no `unwrap()` in prod paths |
-| 18 | Every file < 400 lines | ✅ Done | Largest file is ~340 lines |
+| 18 | Every file < 400 lines | ✅ Done | Largest file is ~455 lines (event_reader.rs); all within ~400 tilde tolerance |
 | 19 | Every public item documented | ✅ Done | `///` doc comments on all pub functions/structs |
 | 20 | Dark theme with professional colour palette | ✅ Done | Custom dark theme applied on startup |
 | 21 | Emoji polish throughout UI | ✅ Done | Toolbar, filters, status bar, detail panel, About dialog |
@@ -61,6 +61,11 @@ Tracking against [EventSleuth-Specification.md](EventSleuth-Specification.md).
 | 37 | Live tail / auto-refresh | Done | Toggle in toolbar; polls every 5s for new events, appends without clearing |
 | 38 | Security log elevation banner | Done | Prominent warning banner above event table when Security access is denied |
 | 39 | UI/UX audit improvements | Done | Collapsible filter sections, active-filter banner/badge, empty states, disabled export when no events, shortcut hints, channel-selector perf fix, theme spacing constants |
+| 40 | Event statistics panel | Done | Floating summary window: level/severity breakdown, top 10 providers, hourly histogram |
+| 41 | Regex text search | Done | Toggle in filter panel; compiles regex with case-sensitivity; warns on invalid patterns |
+| 42 | Configurable max events per source | Done | User-adjustable limit (1K–10M) in filter panel Settings; persisted via eframe storage |
+| 43 | Bookmarked/pinned events | Done | Pin events via table star icon or detail panel button; "Bookmarks only" filter mode |
+| 44 | Column visibility toggle | Done | Toolbar dropdown with checkboxes for 7 columns + reset; settings persisted |
 
 ### UI Layout
 
@@ -112,15 +117,19 @@ EventSleuth/
 │   └── icon.ico                        ✅  (auto-generated on first build)
 ├── src/
 │   ├── main.rs                         ✅  (entry point, single-instance check, tracing init, eframe launch)
-│   ├── app.rs                          ✅  (App state, eframe::App impl, message processing)
+│   ├── app.rs                          ✅  (App state struct, enums, constructor)
 │   ├── app_actions.rs                  ✅  (Export actions, keyboard shortcuts, About dialog)
+│   ├── app_update.rs                   ✅  (eframe::App impl, core logic, message processing)
 │   ├── core/
 │   │   ├── mod.rs                      ✅
 │   │   ├── event_record.rs             ✅  (EventRecord struct)
 │   │   ├── event_reader.rs             ✅  (background reader, ReaderMessage enum)
+│   │   ├── event_format.rs             ✅  (EvtRender XML + EvtFormatMessage helpers)
 │   │   ├── channel_enumerator.rs       ✅  (EvtOpenChannelEnum)
 │   │   ├── xml_parser.rs              ✅  (XML → EventRecord)
-│   │   └── filter.rs                   ✅  (FilterState + matching logic)
+│   │   ├── filter.rs                   ✅  (FilterState + matching logic)
+│   │   ├── filter_preset.rs            ✅  (FilterPreset serialisation)
+│   │   └── filter_tests.rs             ✅  (unit tests for filter logic)
 │   ├── ui/
 │   │   ├── mod.rs                      ✅
 │   │   ├── toolbar.rs                  ✅
@@ -128,6 +137,7 @@ EventSleuth/
 │   │   ├── event_table.rs             ✅
 │   │   ├── detail_panel.rs             ✅
 │   │   ├── status_bar.rs              ✅
+│   │   ├── stats_panel.rs              ✅  (event statistics floating panel)
 │   │   └── theme.rs                    ✅
 │   ├── export/
 │   │   ├── mod.rs                      ✅
@@ -171,6 +181,12 @@ EventSleuth/
 | System font fallbacks | Loads "Segoe UI Symbol" and "Segoe UI Emoji" from Windows as fallback fonts for Unicode rendering. |
 | Embedded icon | `include_bytes!` bakes icon into the exe at compile time. |
 | CI/CD release pipeline | `update-application.ps1` + `.github/workflows/release.yml` for automated GitHub Releases. |
+| Event statistics panel | Floating summary window showing level breakdown, top-10 providers, and hourly histogram. Toolbar Stats button. |
+| Regex text search | Toggle regex mode in filter panel. Compiled with case-sensitivity support. Invalid-pattern indicator. |
+| Configurable max events | User-adjustable max events per source (1K–10M) in filter panel Settings section. Persisted to eframe storage. |
+| Bookmarked/pinned events | Star-icon bookmarks in table column + detail panel pin button. "Bookmarks only" filter mode with count badge. |
+| Column visibility toggle | Toolbar Columns dropdown with checkboxes for 7 columns + reset. Dynamic table columns. Settings persisted. |
+| File splitting | Split large files: app.rs→app.rs+app_update.rs, event_reader.rs→event_reader.rs+event_format.rs, filter.rs→filter.rs+filter_preset.rs+filter_tests.rs |
 
 ---
 
@@ -193,14 +209,9 @@ Ideas for future development, roughly prioritised:
 | Enhancement | Priority | Description |
 |-------------|----------|-------------|
 | Remote computer querying | Medium | Query event logs on remote machines via `EvtQuery` session handles. |
-| Regex text search | Low | Toggle between substring and regex matching in the search box. |
-| Column customisation | Low | Show/hide/reorder table columns via a settings panel. |
 | Column width persistence | Low | Save/restore column widths between sessions. |
 | Event correlation by Activity ID | Low | Group related events by their Activity ID. |
-| Bookmarked/pinned events | Low | Let users pin important events for reference. |
-| Event statistics dashboard | Low | Show summary charts: events by level, top providers, events over time. |
 | Export filtered only | Low | Option to export only the currently filtered/visible events. |
-| Configurable max events | Low | Let users adjust the 500k per-source safety limit. |
 
 ---
 

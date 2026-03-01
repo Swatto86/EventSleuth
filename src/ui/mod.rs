@@ -6,6 +6,7 @@
 pub mod detail_panel;
 pub mod event_table;
 pub mod filter_panel;
+pub mod stats_panel;
 pub mod status_bar;
 pub mod theme;
 pub mod toolbar;

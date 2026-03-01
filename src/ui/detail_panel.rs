@@ -47,7 +47,7 @@ impl EventSleuthApp {
                 egui::RichText::new("\u{1F4C4} XML").strong(),
             );
 
-            // Copy actions grouped on the right
+            // Copy actions and bookmark toggle grouped on the right
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button("\u{1F4CB} XML")
@@ -75,6 +75,33 @@ impl EventSleuthApp {
                         .color(theme::text_dim(self.dark_mode))
                         .small(),
                 );
+                ui.separator();
+                // Bookmark toggle for the selected event
+                if let Some(vis_idx) = self.selected_event_idx {
+                    if let Some(&ev_idx) = self.filtered_indices.get(vis_idx) {
+                        let is_bookmarked = self.bookmarked_indices.contains(&ev_idx);
+                        let pin_icon = if is_bookmarked {
+                            "\u{2B50} Unpin"
+                        } else {
+                            "\u{2606} Pin"
+                        };
+                        if ui
+                            .small_button(pin_icon)
+                            .on_hover_text(if is_bookmarked {
+                                "Remove bookmark"
+                            } else {
+                                "Bookmark this event for later reference"
+                            })
+                            .clicked()
+                        {
+                            if is_bookmarked {
+                                self.bookmarked_indices.remove(&ev_idx);
+                            } else {
+                                self.bookmarked_indices.insert(ev_idx);
+                            }
+                        }
+                    }
+                }
             });
         });
 

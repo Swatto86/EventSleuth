@@ -4,71 +4,16 @@
 //! Filtering is performed in-memory against the loaded event list, with
 //! checks ordered cheapest-first for short-circuit efficiency.
 //!
-//! [`FilterPreset`] is the serialisable subset of a filter configuration,
-//! suitable for persisting named presets to disk or eframe storage.
+//! [`FilterPreset`] lives in the sibling [`super::filter_preset`] module
+//! and is re-exported here for convenience.
 
 use crate::core::event_record::EventRecord;
 use std::collections::HashSet;
 
-// ── Serialisable filter preset ──────────────────────────────────────────
-
-/// A named, serialisable snapshot of the user-visible filter fields.
+/// Compiled regex for text search, when regex mode is enabled.
 ///
-/// Unlike [`FilterState`], this omits derived/parsed caches
-/// (`include_ids`, `exclude_ids`, `time_from`, `time_to`) which are
-/// recomputed from the input strings when the preset is loaded.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct FilterPreset {
-    /// Display name shown in the preset list.
-    pub name: String,
-    /// Raw event-ID input string (e.g. `"1001, 4000-4999"`).
-    pub event_id_input: String,
-    /// Enabled severity levels (index 0..=5).
-    pub levels: [bool; 6],
-    /// Provider substring filter.
-    pub provider_filter: String,
-    /// Free-form text search.
-    pub text_search: String,
-    /// Raw "time from" input string.
-    pub time_from_input: String,
-    /// Raw "time to" input string.
-    pub time_to_input: String,
-    /// Case-sensitive search flag.
-    pub case_sensitive: bool,
-}
-
-impl FilterPreset {
-    /// Create a preset from the current [`FilterState`].
-    pub fn from_state(name: &str, state: &FilterState) -> Self {
-        Self {
-            name: name.to_owned(),
-            event_id_input: state.event_id_input.clone(),
-            levels: state.levels,
-            provider_filter: state.provider_filter.clone(),
-            text_search: state.text_search.clone(),
-            time_from_input: state.time_from_input.clone(),
-            time_to_input: state.time_to_input.clone(),
-            case_sensitive: state.case_sensitive,
-        }
-    }
-
-    /// Convert this preset into a fully-parsed [`FilterState`].
-    pub fn to_filter_state(&self) -> FilterState {
-        let mut state = FilterState {
-            event_id_input: self.event_id_input.clone(),
-            levels: self.levels,
-            provider_filter: self.provider_filter.clone(),
-            text_search: self.text_search.clone(),
-            time_from_input: self.time_from_input.clone(),
-            time_to_input: self.time_to_input.clone(),
-            case_sensitive: self.case_sensitive,
-            ..FilterState::default()
-        };
-        state.parse_event_ids();
-        state.parse_time_range();
-        state
-    }
-}
+/// Wrapped in `Option` because compilation may fail for invalid patterns.
+type CompiledRegex = Option<regex::Regex>;
 
 /// Holds all active filter criteria.
 ///
@@ -122,6 +67,13 @@ pub struct FilterState {
 
     /// Whether text search is case-sensitive.
     pub case_sensitive: bool,
+
+    /// Whether text search uses regex patterns instead of literal substrings.
+    pub use_regex: bool,
+
+    /// Compiled regex for the current `text_search` when `use_regex` is true.
+    /// `None` if the pattern is empty or invalid.
+    pub compiled_regex: CompiledRegex,
 }
 
 impl Default for FilterState {
@@ -141,6 +93,8 @@ impl Default for FilterState {
             time_from: None,
             time_to: None,
             case_sensitive: false,
+            use_regex: false,
+            compiled_regex: None,
         }
     }
 }
@@ -247,13 +201,28 @@ impl FilterState {
     /// Refresh the cached lowercase versions of text search fields.
     ///
     /// **Must** be called after modifying `text_search` or `provider_filter`
-    /// to keep the derived caches in sync. Currently also called by
+    /// to keep the derived caches in sync. Also recompiles the regex when
+    /// `use_regex` is enabled. Currently also called by
     /// [`parse_event_ids`] as a convenience, but callers that change only
     /// the text fields (without touching Event IDs) should call this
     /// method directly.
     pub fn update_search_cache(&mut self) {
         self.text_search_lower = self.text_search.to_lowercase();
         self.provider_filter_lower = self.provider_filter.to_lowercase();
+
+        // Compile regex if in regex mode
+        if self.use_regex && !self.text_search.is_empty() {
+            let pattern_result = if self.case_sensitive {
+                regex::RegexBuilder::new(&self.text_search).build()
+            } else {
+                regex::RegexBuilder::new(&self.text_search)
+                    .case_insensitive(true)
+                    .build()
+            };
+            self.compiled_regex = pattern_result.ok();
+        } else {
+            self.compiled_regex = None;
+        }
     }
 
     /// Re-parse the time range input strings into `time_from` / `time_to`.
@@ -306,7 +275,9 @@ impl FilterState {
 
         // 5. Text search — most expensive, checked last
         if !self.text_search.is_empty() {
-            let matches = if self.case_sensitive {
+            let matches = if self.use_regex {
+                self.text_search_regex(event)
+            } else if self.case_sensitive {
                 self.text_search_case_sensitive(event)
             } else {
                 self.text_search_case_insensitive(event)
@@ -337,6 +308,35 @@ impl FilterState {
             }
         }
         if event.raw_xml.contains(q) {
+            return true;
+        }
+        false
+    }
+
+    /// Regex-based text search across event fields.
+    ///
+    /// Uses the pre-compiled regex from [`compiled_regex`]. Returns `false`
+    /// if the regex failed to compile (invalid pattern).
+    fn text_search_regex(&self, event: &EventRecord) -> bool {
+        let re = match &self.compiled_regex {
+            Some(re) => re,
+            None => return false, // invalid regex pattern
+        };
+        if re.is_match(&event.message) {
+            return true;
+        }
+        if re.is_match(&event.provider_name) {
+            return true;
+        }
+        if re.is_match(&event.channel) {
+            return true;
+        }
+        for (k, v) in &event.event_data {
+            if re.is_match(k) || re.is_match(v) {
+                return true;
+            }
+        }
+        if re.is_match(&event.raw_xml) {
             return true;
         }
         false
@@ -440,86 +440,5 @@ impl FilterState {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use chrono::Utc;
-
-    fn make_event(id: u32, level: u8, provider: &str, message: &str) -> EventRecord {
-        EventRecord {
-            raw_xml: String::new(),
-            channel: "Application".into(),
-            event_id: id,
-            level,
-            level_name: EventRecord::level_to_name(level).into(),
-            provider_name: provider.into(),
-            timestamp: Utc::now(),
-            computer: "TEST-PC".into(),
-            message: message.into(),
-            process_id: 0,
-            thread_id: 0,
-            task: 0,
-            opcode: 0,
-            keywords: 0,
-            activity_id: None,
-            user_sid: None,
-            event_data: vec![],
-        }
-    }
-
-    #[test]
-    fn test_default_matches_all() {
-        let f = FilterState::default();
-        let e = make_event(1001, 2, "TestProvider", "some message");
-        assert!(f.matches(&e));
-    }
-
-    #[test]
-    fn test_event_id_include() {
-        let mut f = FilterState::default();
-        f.event_id_input = "1001, 1002".into();
-        f.parse_event_ids();
-
-        assert!(f.matches(&make_event(1001, 4, "P", "m")));
-        assert!(f.matches(&make_event(1002, 4, "P", "m")));
-        assert!(!f.matches(&make_event(9999, 4, "P", "m")));
-    }
-
-    #[test]
-    fn test_event_id_exclude() {
-        let mut f = FilterState::default();
-        f.event_id_input = "!1001".into();
-        f.parse_event_ids();
-
-        assert!(!f.matches(&make_event(1001, 4, "P", "m")));
-        assert!(f.matches(&make_event(9999, 4, "P", "m")));
-    }
-
-    #[test]
-    fn test_event_id_range() {
-        let mut f = FilterState::default();
-        f.event_id_input = "100-105".into();
-        f.parse_event_ids();
-
-        assert!(f.matches(&make_event(100, 4, "P", "m")));
-        assert!(f.matches(&make_event(103, 4, "P", "m")));
-        assert!(f.matches(&make_event(105, 4, "P", "m")));
-        assert!(!f.matches(&make_event(106, 4, "P", "m")));
-    }
-
-    #[test]
-    fn test_level_filter() {
-        let mut f = FilterState::default();
-        f.levels = [false, false, true, false, false, false]; // only Error
-        assert!(f.matches(&make_event(1, 2, "P", "m"))); // Error
-        assert!(!f.matches(&make_event(1, 4, "P", "m"))); // Info
-    }
-
-    #[test]
-    fn test_text_search_case_insensitive() {
-        let mut f = FilterState::default();
-        f.text_search = "explorer".into();
-        f.parse_event_ids(); // updates text_search_lower cache
-        assert!(f.matches(&make_event(1, 4, "P", "Explorer.exe crashed")));
-        assert!(!f.matches(&make_event(1, 4, "P", "Nothing here")));
-    }
-}
+#[path = "filter_tests.rs"]
+mod tests;

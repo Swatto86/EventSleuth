@@ -80,30 +80,112 @@ impl EventSleuthApp {
             .striped(true)
             .resizable(true)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::auto().at_least(145.0).clip(true)) // Timestamp
-            .column(Column::auto().at_least(85.0).clip(true)) // Level
-            .column(Column::auto().at_least(55.0)) // Event ID
-            .column(Column::auto().at_least(140.0).clip(true)) // Provider
-            .column(Column::remainder().clip(true)) // Message
-            .sense(egui::Sense::click());
+            .column(Column::auto().at_least(24.0).clip(false)); // Bookmark pin
+
+        // Conditionally add columns based on visibility settings
+        let cv = &self.column_visibility;
+        let table = if cv.timestamp {
+            table.column(Column::auto().at_least(145.0).clip(true))
+        } else {
+            table
+        };
+        let table = if cv.level {
+            table.column(Column::auto().at_least(85.0).clip(true))
+        } else {
+            table
+        };
+        let table = if cv.event_id {
+            table.column(Column::auto().at_least(55.0))
+        } else {
+            table
+        };
+        let table = if cv.provider {
+            table.column(Column::auto().at_least(140.0).clip(true))
+        } else {
+            table
+        };
+        let table = if cv.channel {
+            table.column(Column::auto().at_least(120.0).clip(true))
+        } else {
+            table
+        };
+        let table = if cv.computer {
+            table.column(Column::auto().at_least(100.0).clip(true))
+        } else {
+            table
+        };
+        let table = if cv.message {
+            table.column(Column::remainder().clip(true))
+        } else {
+            table
+        };
+        let table = table.sense(egui::Sense::click());
+
+        // Collect bookmark toggles to apply after table rendering
+        // (the row closure borrows self immutably for `all_events` access).
+        let bookmark_toggle = std::cell::Cell::new(None::<usize>);
 
         table
             .header(22.0, |mut header| {
+                // Copy visibility flags to avoid borrowing self alongside the mutable closure
+                let show_timestamp = self.column_visibility.timestamp;
+                let show_level = self.column_visibility.level;
+                let show_event_id = self.column_visibility.event_id;
+                let show_provider = self.column_visibility.provider;
+                let show_channel = self.column_visibility.channel;
+                let show_computer = self.column_visibility.computer;
+                let show_message = self.column_visibility.message;
+
+                // Bookmark column header (pin icon)
                 header.col(|ui| {
-                    self.render_sort_header(ui, SortColumn::Timestamp, "Timestamp");
+                    ui.label(
+                        egui::RichText::new("\u{2B50}")
+                            .small()
+                            .color(theme::text_dim(self.dark_mode)),
+                    )
+                    .on_hover_text("Bookmarked events");
                 });
-                header.col(|ui| {
-                    self.render_sort_header(ui, SortColumn::Level, "Level");
-                });
-                header.col(|ui| {
-                    self.render_sort_header(ui, SortColumn::EventId, "ID");
-                });
-                header.col(|ui| {
-                    self.render_sort_header(ui, SortColumn::Provider, "Provider");
-                });
-                header.col(|ui| {
-                    self.render_sort_header(ui, SortColumn::Message, "Message");
-                });
+                if show_timestamp {
+                    header.col(|ui| {
+                        self.render_sort_header(ui, SortColumn::Timestamp, "Timestamp");
+                    });
+                }
+                if show_level {
+                    header.col(|ui| {
+                        self.render_sort_header(ui, SortColumn::Level, "Level");
+                    });
+                }
+                if show_event_id {
+                    header.col(|ui| {
+                        self.render_sort_header(ui, SortColumn::EventId, "ID");
+                    });
+                }
+                if show_provider {
+                    header.col(|ui| {
+                        self.render_sort_header(ui, SortColumn::Provider, "Provider");
+                    });
+                }
+                if show_channel {
+                    header.col(|ui| {
+                        ui.label(
+                            egui::RichText::new("Channel")
+                                .color(theme::text_primary(self.dark_mode)),
+                        );
+                    });
+                }
+                if show_computer {
+                    header.col(|ui| {
+                        ui.label(
+                            egui::RichText::new("Computer")
+                                .color(theme::text_primary(self.dark_mode)),
+                        );
+                    });
+                }
+                if show_message {
+                    header.col(|ui| {
+                        self.render_sort_header(ui, SortColumn::Message, "Message");
+                    });
+                }
             })
             .body(|body| {
                 body.rows(theme::TABLE_ROW_HEIGHT, row_count, |mut row| {
@@ -116,60 +198,133 @@ impl EventSleuthApp {
                     let is_selected = self.selected_event_idx == Some(visible_idx);
                     let dark = self.dark_mode;
                     let level_color = theme::level_color(event.level, dark);
+                    let is_bookmarked = self.bookmarked_indices.contains(&event_idx);
 
                     row.set_selected(is_selected);
 
-                    // Timestamp
+                    // Bookmark pin
                     row.col(|ui| {
-                        ui.label(
-                            egui::RichText::new(format_table_timestamp(&event.timestamp))
-                                .color(theme::text_secondary(dark))
-                                .small(),
+                        let icon = if is_bookmarked {
+                            "\u{2B50}"
+                        } else {
+                            "\u{2606}"
+                        };
+                        let btn = ui.add(
+                            egui::Button::new(egui::RichText::new(icon).size(12.0).color(
+                                if is_bookmarked {
+                                    theme::accent(dark)
+                                } else {
+                                    theme::text_dim(dark)
+                                },
+                            ))
+                            .frame(false),
                         );
+                        if btn.clicked() {
+                            bookmark_toggle.set(Some(event_idx));
+                        }
+                        btn.on_hover_text(if is_bookmarked {
+                            "Remove bookmark"
+                        } else {
+                            "Bookmark this event"
+                        });
                     });
+
+                    let cv = &self.column_visibility;
+
+                    // Timestamp
+                    if cv.timestamp {
+                        row.col(|ui| {
+                            ui.label(
+                                egui::RichText::new(format_table_timestamp(&event.timestamp))
+                                    .color(theme::text_secondary(dark))
+                                    .small(),
+                            );
+                        });
+                    }
 
                     // Level (colour-coded)
-                    row.col(|ui| {
-                        ui.label(egui::RichText::new(&event.level_name).color(level_color));
-                    });
+                    if cv.level {
+                        row.col(|ui| {
+                            ui.label(egui::RichText::new(&event.level_name).color(level_color));
+                        });
+                    }
 
                     // Event ID
-                    row.col(|ui| {
-                        ui.label(event.event_id.to_string());
-                    });
+                    if cv.event_id {
+                        row.col(|ui| {
+                            ui.label(event.event_id.to_string());
+                        });
+                    }
 
                     // Provider
-                    row.col(|ui| {
-                        ui.label(
-                            egui::RichText::new(&event.provider_name)
-                                .color(theme::text_secondary(dark)),
-                        );
-                    });
+                    if cv.provider {
+                        row.col(|ui| {
+                            ui.label(
+                                egui::RichText::new(&event.provider_name)
+                                    .color(theme::text_secondary(dark)),
+                            );
+                        });
+                    }
+
+                    // Channel
+                    if cv.channel {
+                        row.col(|ui| {
+                            ui.label(
+                                egui::RichText::new(&event.channel)
+                                    .color(theme::text_secondary(dark)),
+                            );
+                        });
+                    }
+
+                    // Computer
+                    if cv.computer {
+                        row.col(|ui| {
+                            ui.label(
+                                egui::RichText::new(&event.computer)
+                                    .color(theme::text_secondary(dark)),
+                            );
+                        });
+                    }
 
                     // Message (truncated to one line)
-                    row.col(|ui| {
-                        let msg = event.display_message();
-                        if msg.len() <= 200 {
-                            ui.label(msg);
-                        } else {
-                            let end = msg
-                                .char_indices()
-                                .nth(200)
-                                .map(|(i, _)| i)
-                                .unwrap_or(msg.len());
-                            if end < msg.len() {
-                                ui.label(format!("{}...", &msg[..end]));
-                            } else {
+                    if cv.message {
+                        row.col(|ui| {
+                            let msg = event.display_message();
+                            if msg.len() <= 200 {
                                 ui.label(msg);
+                            } else {
+                                let end = msg
+                                    .char_indices()
+                                    .nth(200)
+                                    .map(|(i, _)| i)
+                                    .unwrap_or(msg.len());
+                                if end < msg.len() {
+                                    ui.label(format!("{}...", &msg[..end]));
+                                } else {
+                                    ui.label(msg);
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
 
                     if row.response().clicked() {
                         self.selected_event_idx = Some(visible_idx);
                     }
                 });
             });
+
+        // Apply deferred bookmark toggle
+        if let Some(idx) = bookmark_toggle.get() {
+            if self.bookmarked_indices.contains(&idx) {
+                self.bookmarked_indices.remove(&idx);
+            } else {
+                self.bookmarked_indices.insert(idx);
+            }
+            // If in bookmarks-only mode, refilter to update the view
+            if self.show_bookmarks_only {
+                self.needs_refilter = true;
+            }
+        }
     }
 
     /// Render a sortable column header button.
