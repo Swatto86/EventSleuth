@@ -42,6 +42,15 @@ impl EventSleuthApp {
         self.bookmarked_indices.clear();
         self.show_bookmarks_only = false;
 
+        // Invalidate the stats cache immediately so a zero-event query
+        // never leaves the panel showing the previous run's data.
+        self.stats_dirty = true;
+
+        // Force a filter pass (even with no events) so that all derived
+        // state (stats_dirty, filtered_indices) is consistent on
+        // the first frame after loading starts.
+        self.needs_refilter = true;
+
         // Create communication channel and cancellation flag
         let (tx, rx) = crossbeam_channel::bounded::<ReaderMessage>(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));
@@ -99,6 +108,10 @@ impl EventSleuthApp {
                     self.is_loading = false;
                     self.reader_rx = None;
                     self.cancel_flag = None;
+                    // Always invalidate the stats cache when a query finishes,
+                    // including the zero-event case where no EventBatch
+                    // messages arrived and needs_refilter was never set.
+                    self.stats_dirty = true;
                     if self.is_tail_query {
                         // Tail query: only update status if new events arrived
                         if total > 0 {

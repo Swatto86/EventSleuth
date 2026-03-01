@@ -310,6 +310,14 @@ impl EventSleuthApp {
         self.bookmarked_indices.clear();
         self.show_bookmarks_only = false;
 
+        // Invalidate the stats cache immediately so a zero-event file
+        // import never leaves the panel showing the previous run's data.
+        self.stats_dirty = true;
+
+        // Force a filter pass on the next frame so all derived state
+        // (stats_dirty, filtered_indices) is consistent.
+        self.needs_refilter = true;
+
         let (tx, rx) = crossbeam_channel::bounded(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));
 

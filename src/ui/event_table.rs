@@ -315,22 +315,20 @@ impl EventSleuthApp {
                     }
 
                     // Message (truncated to one line)
+                    // Use char count (not byte length) so multi-byte Unicode
+                    // messages are not incorrectly truncated short.
                     if cv.message {
                         row.col(|ui| {
                             let msg = event.display_message();
-                            if msg.len() <= 200 {
-                                ui.label(msg);
+                            // char_indices().nth(200) is O(200) but the call
+                            // occurs only for messages longer than 200 chars.
+                            let truncation = msg.char_indices().nth(200);
+                            if let Some((byte_end, _)) = truncation {
+                                // There IS a 201st character — truncate at 200 chars.
+                                ui.label(format!("{}...", &msg[..byte_end]));
                             } else {
-                                let end = msg
-                                    .char_indices()
-                                    .nth(200)
-                                    .map(|(i, _)| i)
-                                    .unwrap_or(msg.len());
-                                if end < msg.len() {
-                                    ui.label(format!("{}...", &msg[..end]));
-                                } else {
-                                    ui.label(msg);
-                                }
+                                // Fewer than 200 chars: show in full.
+                                ui.label(msg);
                             }
                         });
                     }

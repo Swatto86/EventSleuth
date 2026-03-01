@@ -344,13 +344,11 @@ impl FilterState {
 
     /// Case-insensitive text search across event fields.
     ///
-    /// Uses `text_search_lower` (cached by `parse_event_ids`) to avoid
-    /// re-allocating the lowered search term once per event.
-    /// Case-insensitive text search across event fields.
-    ///
     /// Uses [`contains_case_insensitive`] for zero-allocation matching on
     /// ASCII content (typical of Windows Event Log data). Fields are checked
-    /// cheapest-first with early return on match.
+    /// cheapest-first with early return on match. The `text_search_lower`
+    /// cache (updated by [`update_search_cache`]) avoids re-lowercasing the
+    /// needle on every event.
     fn text_search_case_insensitive(&self, event: &EventRecord) -> bool {
         let q = self.text_search_lower.as_str();
         if contains_case_insensitive(&event.message, q) {

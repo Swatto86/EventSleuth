@@ -295,6 +295,11 @@ fn read_channel(
     let mut render_buf: Vec<u16> = vec![0; EVT_RENDER_BUFFER_SIZE];
     let mut format_buf: Vec<u16> = vec![0; EVT_FORMAT_BUFFER_SIZE];
 
+    // Retry counter for EvtNext timeouts. The Event Log service can be
+    // temporarily slow under load; a timeout on `EvtNext` does not mean
+    // there are no more events — retrying is the correct response (Rule 11).
+    let mut timeout_retries = 0u32;
+
     loop {
         if cancel.load(Ordering::Relaxed) {
             break;
@@ -324,12 +329,34 @@ fn read_channel(
             Ok(()) if returned == 0 => break,
             Err(e) => {
                 let code = e.code().0 as u32;
-                // ERROR_NO_MORE_ITEMS (259 / 0x103) = normal end
+                // ERROR_NO_MORE_ITEMS (259 / 0x103) = normal end of results
                 if code == 259 || code == 0x80070103 {
                     break;
                 }
-                // ERROR_TIMEOUT = 0x000005B4 (1460) — try again or break
+                // ERROR_TIMEOUT (1460 / 0x800705B4): the Event Log service
+                // was slow responding.  Retry up to MAX_RETRY_ATTEMPTS times
+                // (with a small sleep so we don't spin) before giving up.
+                // Previously this immediately broke the loop, silently
+                // truncating the channel read on busy systems.
                 if code == 1460 || code == 0x800705B4 {
+                    timeout_retries += 1;
+                    if timeout_retries <= MAX_RETRY_ATTEMPTS {
+                        let delay_ms = RETRY_BASE_DELAY_MS * (1u64 << (timeout_retries - 1));
+                        tracing::debug!(
+                            "EvtNext timeout on '{}' (retry {}/{}), waiting {}ms",
+                            channel,
+                            timeout_retries,
+                            MAX_RETRY_ATTEMPTS,
+                            delay_ms,
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                        continue;
+                    }
+                    tracing::warn!(
+                        "EvtNext timed out after {} retries on channel '{}', read may be incomplete",
+                        MAX_RETRY_ATTEMPTS,
+                        channel,
+                    );
                     break;
                 }
                 // Close query handle before returning error
@@ -341,7 +368,10 @@ fn read_channel(
                     context: format!("EvtNext on channel '{channel}'"),
                 });
             }
-            _ => {}
+            _ => {
+                // Successful batch received — reset the timeout retry counter.
+                timeout_retries = 0;
+            }
         }
 
         // Process the batch of returned event handles
