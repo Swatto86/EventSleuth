@@ -9,6 +9,10 @@ authors = ["EventSleuth"]
 name = "EventSleuth"
 path = "src/main.rs"
 
+[lib]
+name = "eventsleuth"
+path = "src/lib.rs"
+
 [dependencies]
 eframe = { version = "0.31", default-features = true, features = ["persistence"] }
 egui = "0.31"

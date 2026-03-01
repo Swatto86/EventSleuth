@@ -1,6 +1,7 @@
 //! JSON export for filtered event records.
 //!
 //! Serialises the event list as a pretty-printed JSON array using Serde.
+//! Performs pre-flight validation (Rule 17) before writing.
 
 use crate::core::event_record::EventRecord;
 use crate::util::error::EventSleuthError;
@@ -10,9 +11,15 @@ use std::path::Path;
 ///
 /// Output is a pretty-printed JSON array of [`EventRecord`] objects.
 ///
+/// # Pre-flight (Rule 17)
+/// Validates that the target directory exists and is writable before writing.
+///
 /// # Errors
-/// Returns [`EventSleuthError::Export`] if the file cannot be created or written.
+/// Returns [`EventSleuthError::Export`] if validation fails or the file
+/// cannot be created or written.
 pub fn export_json(events: &[EventRecord], path: &Path) -> Result<(), EventSleuthError> {
+    // Re-use the same validation logic as CSV export
+    crate::export::csv_export::validate_export_path(path)?;
     let file = std::fs::File::create(path)
         .map_err(|e| EventSleuthError::Export(format!("Failed to create JSON file: {e}")))?;
 
