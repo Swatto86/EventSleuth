@@ -98,18 +98,23 @@ impl EventSleuthApp {
                     // Message (truncated to one line)
                     row.col(|ui| {
                         let msg = event.display_message();
-                        // Truncate long messages for the table view (char-safe)
-                        let display = if msg.chars().count() > 200 {
+                        // Fast path: messages under 200 bytes are definitely
+                        // under 200 chars -- skip char-counting entirely.
+                        if msg.len() <= 200 {
+                            ui.label(msg);
+                        } else {
+                            // Char-safe truncation at 200 characters
                             let end = msg
                                 .char_indices()
                                 .nth(200)
                                 .map(|(i, _)| i)
                                 .unwrap_or(msg.len());
-                            format!("{}...", &msg[..end])
-                        } else {
-                            msg.to_string()
-                        };
-                        ui.label(&display);
+                            if end < msg.len() {
+                                ui.label(format!("{}...", &msg[..end]));
+                            } else {
+                                ui.label(msg);
+                            }
+                        }
                     });
 
                     // Handle row click → select

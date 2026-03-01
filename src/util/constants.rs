@@ -22,12 +22,15 @@ pub const MAX_EVENTS_PER_CHANNEL: usize = 500_000;
 pub const DEFAULT_CHANNELS: &[&str] = &["Application", "System"];
 
 /// Buffer size (in `u16` units) for `EvtRender` output.
-/// 64 KB is enough for the vast majority of events.
-pub const EVT_RENDER_BUFFER_SIZE: usize = 32_768;
+/// 8 KB (16 KB raw) is enough for the vast majority of events; the buffer
+/// grows on demand for larger events and the allocation is reused across
+/// all events in a channel read.
+pub const EVT_RENDER_BUFFER_SIZE: usize = 8_192;
 
 /// Size of the channel used to send batches from the reader thread to the UI.
-/// Bounded to apply back-pressure if the UI falls behind.
-pub const CHANNEL_BOUND: usize = 64;
+/// Bounded to apply back-pressure if the UI falls behind. 256 lets the
+/// reader run well ahead of the UI without stalling on send.
+pub const CHANNEL_BOUND: usize = 256;
 
 /// Row height in the virtual-scrolled event table (in logical pixels).
 pub const TABLE_ROW_HEIGHT: f32 = 22.0;
@@ -45,6 +48,11 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// GitHub repository URL.
 pub const APP_GITHUB_URL: &str = "https://github.com/Swatto86/EventSleuth";
+
+/// Buffer size (in `u16` units) for `EvtFormatMessage` output.
+/// 2 KB (4 KB raw) covers most formatted message strings; the buffer
+/// grows on demand and is reused across events.
+pub const EVT_FORMAT_BUFFER_SIZE: usize = 2_048;
 
 /// Debounce delay for text-based filter inputs (milliseconds).
 /// Prevents excessive re-filtering while the user is still typing.
