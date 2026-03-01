@@ -6,9 +6,7 @@
 //! and analytic channels under `Microsoft-Windows-*`.
 
 use crate::util::error::EventSleuthError;
-use windows::Win32::System::EventLog::{
-    EvtClose, EvtNextChannelPath, EvtOpenChannelEnum,
-};
+use windows::Win32::System::EventLog::{EvtClose, EvtNextChannelPath, EvtOpenChannelEnum};
 
 /// Enumerate all available event log channels on the local system.
 ///
@@ -24,9 +22,8 @@ pub fn enumerate_channels() -> Result<Vec<String>, EventSleuthError> {
 
     // SAFETY: EvtOpenChannelEnum with a null session handle opens a local
     // enumeration. The returned handle is valid until closed with EvtClose.
-    let handle = unsafe { EvtOpenChannelEnum(None, 0) }.map_err(|e| {
-        EventSleuthError::ChannelEnum(format!("EvtOpenChannelEnum failed: {e}"))
-    })?;
+    let handle = unsafe { EvtOpenChannelEnum(None, 0) }
+        .map_err(|e| EventSleuthError::ChannelEnum(format!("EvtOpenChannelEnum failed: {e}")))?;
 
     // Buffer for channel path strings (most are under 256 chars)
     let mut buffer = vec![0u16; 512];
@@ -36,9 +33,7 @@ pub fn enumerate_channels() -> Result<Vec<String>, EventSleuthError> {
         // SAFETY: We pass a valid handle and a properly sized buffer.
         // EvtNextChannelPath writes the channel name as a null-terminated
         // UTF-16 string into the buffer.
-        let result = unsafe {
-            EvtNextChannelPath(handle, Some(buffer.as_mut_slice()), &mut used)
-        };
+        let result = unsafe { EvtNextChannelPath(handle, Some(buffer.as_mut_slice()), &mut used) };
 
         match result {
             Ok(()) => {
