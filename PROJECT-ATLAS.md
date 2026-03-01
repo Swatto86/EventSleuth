@@ -141,17 +141,6 @@ A separate [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the same ch
 
 Steps: version validation -> Cargo.toml update -> pre-release build + test -> git commit -> delete old tags/releases -> create annotated tag -> push (triggers CI).
 
-### Installer
-
-[installer/eventsleuth.nsi](installer/eventsleuth.nsi): NSIS installer script.
-
-```powershell
-# Build installer (requires NSIS on PATH)
-makensis installer\eventsleuth.nsi
-```
-
-Produces `EventSleuth-Setup.exe` with Start Menu shortcuts, per-user install, and clean uninstaller.
-
 ## Configuration
 
 | Setting | Source | Default | Notes |

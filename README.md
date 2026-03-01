@@ -230,8 +230,6 @@ EventSleuth/
 │   ├── export/           # CSV and JSON export
 │   └── util/             # Constants, error types, time helpers
 ├── tests/                # Integration / E2E tests
-├── installer/
-│   └── eventsleuth.nsi   # NSIS installer script
 ├── assets/
 │   ├── app.manifest      # UAC and DPI manifest
 │   └── icon.ico          # Auto-generated application icon
