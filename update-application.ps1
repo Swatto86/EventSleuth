@@ -62,12 +62,20 @@ function Invoke-Git {
     <#
     .SYNOPSIS
         Run a git command and throw on non-zero exit code.
+
+    .NOTES
+        Intentionally a simple (non-advanced) function with no [Parameter()] or
+        [CmdletBinding()] so that PowerShell never adds common parameters.
+        Advanced functions add -Debug, -Verbose, etc. as abbreviatable names,
+        which means a call like `Invoke-Git tag -d "v1.0.0"` would bind `-d`
+        to `-Debug` (a valid abbreviation) rather than forwarding it to git,
+        causing `tag -d` to silently become `tag` (create instead of delete).
+        Using the automatic $args variable avoids all named-parameter binding.
     #>
-    param([Parameter(ValueFromRemainingArguments = $true)]$GitArgs)
-    $output = & git @GitArgs 2>&1
+    $output = & git @args 2>&1
     if ($LASTEXITCODE -ne 0) {
         $message = ($output | Out-String).Trim()
-        throw "git $($GitArgs -join ' ') failed (exit $LASTEXITCODE): $message"
+        throw "git $($args -join ' ') failed (exit $LASTEXITCODE): $message"
     }
     return $output
 }
