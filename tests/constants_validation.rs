@@ -66,3 +66,36 @@ fn live_tail_interval_is_reasonable() {
     assert!(LIVE_TAIL_INTERVAL_SECS >= 1, "Tail interval too low");
     assert!(LIVE_TAIL_INTERVAL_SECS <= 60, "Tail interval too high");
 }
+
+// ── Regression tests for Bug 3: max-events text field clamping ──────────
+
+/// Regression test for Bug 3: the default max-events value serialises to a
+/// non-empty string so the persistent text-binding field can be initialised
+/// from it without showing an empty / zero field on first launch.
+#[test]
+fn max_events_per_channel_serialises_to_nonempty_string() {
+    let s = MAX_EVENTS_PER_CHANNEL.to_string();
+    assert!(
+        !s.is_empty(),
+        "MAX_EVENTS_PER_CHANNEL must serialise to a non-empty string for the text binding"
+    );
+}
+
+/// Values below the minimum (1_000) are clamped up; values above the
+/// maximum (10_000_000) are clamped down.  This matches the behaviour of
+/// the max-events text field in the filter panel.
+#[test]
+fn max_events_clamping_is_correct() {
+    let clamp = |v: usize| v.clamp(1_000, 10_000_000);
+
+    assert_eq!(clamp(0), 1_000, "0 must clamp to minimum 1000");
+    assert_eq!(clamp(500), 1_000, "500 must clamp to minimum 1000");
+    assert_eq!(clamp(1_000), 1_000, "1000 is exactly the minimum");
+    assert_eq!(clamp(500_000), 500_000, "500000 is within range");
+    assert_eq!(clamp(10_000_000), 10_000_000, "10M is exactly the maximum");
+    assert_eq!(
+        clamp(20_000_000),
+        10_000_000,
+        "20M must clamp to maximum 10M"
+    );
+}

@@ -450,17 +450,17 @@ impl EventSleuthApp {
                 ui.label("Preset name:");
                 let response = ui.text_edit_singleline(&mut self.preset_name_input);
 
-                // Auto-focus the text field once when the dialog first opens.
-                // Previously this called request_focus() on every frame while
-                // the input was empty, which stole keyboard focus away from
-                // every other widget in the application until the user typed
-                // at least one character.
-                if response.gained_focus() {
+                // Request auto-focus exactly ONCE per dialog session.
+                //
+                // Previously this called `request_focus()` on every frame
+                // while the field was empty and not focused, which stole
+                // keyboard focus from every other widget (e.g. Cancel,
+                // Save) as soon as the user deleted their text.  Now we
+                // use `save_preset_focus_requested` to ensure the request
+                // is sent only on the first frame this dialog is rendered.
+                if !self.save_preset_focus_requested {
                     response.request_focus();
-                } else if !response.has_focus() && self.preset_name_input.is_empty() {
-                    // Only steal focus if the field genuinely has no focus yet
-                    // (e.g. the dialog just opened and nothing has been focused).
-                    response.request_focus();
+                    self.save_preset_focus_requested = true;
                 }
 
                 // Enter key to confirm
@@ -502,12 +502,14 @@ impl EventSleuthApp {
             }
             self.preset_name_input.clear();
             self.show_save_preset = false;
+            self.save_preset_focus_requested = false;
             tracing::info!("Saved filter preset: {}", name);
         }
 
         if should_close {
             self.show_save_preset = false;
             self.preset_name_input.clear();
+            self.save_preset_focus_requested = false;
         }
     }
 }

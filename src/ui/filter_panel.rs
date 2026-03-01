@@ -103,6 +103,9 @@ impl EventSleuthApp {
                 ui.separator();
                 if ui.button("\u{1F4BE} Save current...").clicked() {
                     self.show_save_preset = true;
+                    // Reset the focus flag so the text field is auto-focused
+                    // exactly once at the start of this new dialog session.
+                    self.save_preset_focus_requested = false;
                     ui.close_menu();
                 }
             });
@@ -382,14 +385,19 @@ impl EventSleuthApp {
                 egui::RichText::new("Max events per source")
                     .color(theme::text_dim(dark)),
             );
-            let mut max_str = self.max_events_per_channel.to_string();
+            // Use the persistent `max_events_input` string binding so the
+            // text field retains what the user typed between frames.  A
+            // previous version used a local `max_str` variable re-created
+            // from the integer each frame, which overwrote the in-progress
+            // input with the clamped value on every keystroke (Bug fix:
+            // ephemeral-binding reset bug).
             let re = ui.add(
-                egui::TextEdit::singleline(&mut max_str)
+                egui::TextEdit::singleline(&mut self.max_events_input)
                     .desired_width(100.0)
                     .hint_text("500000"),
             );
             if re.changed() {
-                if let Ok(val) = max_str.replace(',', "").trim().parse::<usize>() {
+                if let Ok(val) = self.max_events_input.replace(',', "").trim().parse::<usize>() {
                     self.max_events_per_channel = val.clamp(1_000, 10_000_000);
                 }
             }

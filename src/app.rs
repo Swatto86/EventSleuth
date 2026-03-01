@@ -192,12 +192,26 @@ pub struct EventSleuthApp {
     /// User-adjustable maximum events per channel. Overrides the
     /// compile-time [`constants::MAX_EVENTS_PER_CHANNEL`] default.
     pub max_events_per_channel: usize,
+    /// Raw string binding for the max-events text field in the filter panel.
+    ///
+    /// Persisted as text so that the field shows whatever the user typed
+    /// across frames, rather than being overwritten on every frame with
+    /// the clamped integer value (Bug fix: ephemeral-binding reset bug).
+    pub max_events_input: String,
 
     // ── Bookmarked / pinned events ──────────────────────────────
     /// Set of bookmarked event indices (into `all_events`).
     pub bookmarked_indices: std::collections::HashSet<usize>,
     /// Whether to show only bookmarked events in the table.
     pub show_bookmarks_only: bool,
+
+    // ── Save-preset dialog focus tracking ───────────────────────
+    /// `true` once the save-preset text field has received its initial
+    /// auto-focus for the current dialog session.  Reset to `false` each
+    /// time the dialog opens so focus is requested exactly once per session,
+    /// preventing the field from stealing keyboard focus on every frame
+    /// while it is empty (Bug fix: persistent focus-stealing in preset dialog).
+    pub save_preset_focus_requested: bool,
 
     // ── Column visibility ───────────────────────────────────────
     /// Controls which columns are visible in the event table.
@@ -297,9 +311,12 @@ impl EventSleuthApp {
             stats_dirty: true,
 
             max_events_per_channel: constants::MAX_EVENTS_PER_CHANNEL,
+            max_events_input: constants::MAX_EVENTS_PER_CHANNEL.to_string(),
 
             bookmarked_indices: std::collections::HashSet::new(),
             show_bookmarks_only: false,
+
+            save_preset_focus_requested: false,
 
             column_visibility: ColumnVisibility::default(),
         };
@@ -325,6 +342,8 @@ impl EventSleuthApp {
             }
             if let Some(max_ev) = eframe::get_value::<usize>(storage, "max_events_per_channel") {
                 app.max_events_per_channel = max_ev.clamp(1000, 10_000_000);
+                // Sync the text binding so the field shows the restored value.
+                app.max_events_input = app.max_events_per_channel.to_string();
             }
             if let Some(cv) = eframe::get_value::<ColumnVisibility>(storage, "column_visibility") {
                 app.column_visibility = cv;
