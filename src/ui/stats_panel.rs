@@ -214,7 +214,7 @@ impl EventSleuthApp {
                                 continue;
                             }
                             let color = theme::level_color(i as u8, dark);
-                            let pct = (count as f64 / stats.total as f64 * 100.0) as u32;
+                            let pct = (count as f64 / stats.total as f64 * 100.0).round() as u32;
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new(*name).color(color));
                                 ui.with_layout(

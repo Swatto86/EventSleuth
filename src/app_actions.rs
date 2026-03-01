@@ -153,9 +153,11 @@ impl EventSleuthApp {
                 self.needs_refilter = true;
             }
 
-            // Escape = Close dialogs, then clear selection
+            // Escape = Cancel loading, close dialogs, then clear selection
             if i.key_pressed(egui::Key::Escape) {
-                if self.show_about {
+                if self.is_loading {
+                    self.cancel_loading();
+                } else if self.show_about {
                     self.show_about = false;
                 } else if self.show_channel_selector {
                     self.show_channel_selector = false;
