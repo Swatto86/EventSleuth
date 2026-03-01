@@ -331,16 +331,19 @@ fn read_channel(
             Ok(()) if returned == 0 => break,
             Err(e) => {
                 let code = e.code().0 as u32;
-                // ERROR_NO_MORE_ITEMS (259 / 0x103) = normal end of results
-                if code == 259 || code == 0x80070103 {
+                // ERROR_NO_MORE_ITEMS — HRESULT 0x80070103 = normal end of results.
+                // Note: windows-rs errors always surface as HRESULTs (0x8007xxxx);
+                // the raw Win32 code 259 can never appear here.
+                if code == 0x80070103 {
                     break;
                 }
-                // ERROR_TIMEOUT (1460 / 0x800705B4): the Event Log service
+                // ERROR_TIMEOUT — HRESULT 0x800705B4: the Event Log service
                 // was slow responding.  Retry up to MAX_RETRY_ATTEMPTS times
                 // (with a small sleep so we don't spin) before giving up.
                 // Previously this immediately broke the loop, silently
                 // truncating the channel read on busy systems.
-                if code == 1460 || code == 0x800705B4 {
+                // Note: raw Win32 code 1460 can never appear; use HRESULT form.
+                if code == 0x800705B4 {
                     timeout_retries += 1;
                     if timeout_retries <= MAX_RETRY_ATTEMPTS {
                         let delay_ms = RETRY_BASE_DELAY_MS * (1u64 << (timeout_retries - 1));

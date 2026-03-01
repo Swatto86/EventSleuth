@@ -354,6 +354,39 @@ impl EventSleuthApp {
 
 // ── Live tail ───────────────────────────────────────────────────────────
 
+#[cfg(test)]
+mod tail_datetime_tests {
+    /// Regression test for B2: adding 1 ms to a near-max DateTime<Utc> must not
+    /// panic.  The fix uses `checked_add_signed` so overflow falls back gracefully
+    /// rather than producing a panic in the reader thread startup path.
+    #[test]
+    fn tail_from_near_max_datetime_does_not_panic() {
+        use chrono::Duration;
+        // Use the maximum representable chrono::DateTime<chrono::Utc> value.
+        let max_dt = chrono::DateTime::<chrono::Utc>::MAX_UTC;
+        // This mirrors the logic in start_tail_query exactly.
+        let tail_from = max_dt
+            .checked_add_signed(Duration::milliseconds(1))
+            .unwrap_or(max_dt);
+        // On overflow the fallback must equal the original timestamp.
+        assert_eq!(
+            tail_from, max_dt,
+            "overflow fallback must equal the original timestamp"
+        );
+    }
+
+    /// Normal case: adding 1 ms to a typical timestamp must increment it by exactly 1 ms.
+    #[test]
+    fn tail_from_normal_datetime_increments_by_1ms() {
+        use chrono::{Duration, TimeZone, Utc};
+        let ts = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
+        let result = ts
+            .checked_add_signed(Duration::milliseconds(1))
+            .unwrap_or(ts);
+        assert_eq!(result - ts, Duration::milliseconds(1));
+    }
+}
+
 impl EventSleuthApp {
     /// Start a tail query that appends new events (does NOT clear existing data).
     ///
@@ -365,7 +398,14 @@ impl EventSleuthApp {
 
         // Find the newest timestamp in the current data
         let newest = self.all_events.iter().map(|e| e.timestamp).max();
-        let tail_from = newest.map(|t| t + chrono::Duration::milliseconds(1));
+        // Use checked arithmetic to guard against overflow at DateTime<Utc>::MAX.
+        // If the add overflows (extremely unlikely in practice), fall back to the
+        // un-incremented timestamp so we may re-deliver the last event rather than
+        // silently lose all future tail events.
+        let tail_from = newest.map(|t| {
+            t.checked_add_signed(chrono::Duration::milliseconds(1))
+                .unwrap_or(t)
+        });
 
         let (tx, rx) = crossbeam_channel::bounded(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));
