@@ -27,16 +27,18 @@ use crate::util::error::EventSleuthError;
 ///
 /// These correspond to conditions that may resolve on their own:
 /// busy handles, RPC timeouts, service restarts, file locks.
+///
+/// All values MUST be HRESULTs (0x8007xxxx form), NOT raw Win32 codes.
+/// Win32 error code N becomes HRESULT 0x80070000|N via HRESULT_FROM_WIN32.
 const TRANSIENT_HRESULTS: &[u32] = &[
-    0x800706BA, // RPC server unavailable
-    0x800706BB, // RPC server too busy
-    0x800706BF, // RPC connection aborted
+    0x800706BA, // RPC_S_SERVER_UNAVAILABLE
+    0x800706BB, // RPC_S_SERVER_TOO_BUSY
+    0x800706BF, // RPC_X_BAD_STUB_DATA (RPC connection aborted)
     0x80070020, // ERROR_SHARING_VIOLATION (file lock)
     0x8007045B, // ERROR_SHUTDOWN_IN_PROGRESS
-    0x00000005, // ERROR_ACCESS_DENIED (transient during service restart)
+    0x80070005, // ERROR_ACCESS_DENIED (transient during service restart)
     0x80070015, // ERROR_NOT_READY
-    1460,       // ERROR_TIMEOUT (raw Win32)
-    0x800705B4, // ERROR_TIMEOUT (HRESULT)
+    0x800705B4, // ERROR_TIMEOUT
 ];
 
 /// Check whether a Windows error code is considered transient.
@@ -546,5 +548,48 @@ mod tests {
     fn test_to_wide() {
         let wide = to_wide("AB");
         assert_eq!(wide, vec![0x41, 0x42, 0x00]);
+    }
+
+    // ── Regression tests for TRANSIENT_HRESULTS correctness (B1) ──
+
+    /// ERROR_ACCESS_DENIED as HRESULT (0x80070005) MUST be retried.
+    /// Previously the list contained the raw Win32 code 0x00000005 which
+    /// never matched a real HRESULT, silently skipping retries on
+    /// access-denied failures during Event Log service restarts.
+    #[test]
+    fn test_access_denied_hresult_is_transient() {
+        assert!(
+            is_transient_error(0x80070005),
+            "0x80070005 (HRESULT ERROR_ACCESS_DENIED) must be treated as transient"
+        );
+    }
+
+    /// The raw Win32 code 5 (0x00000005) must NOT be in the list; the
+    /// Windows API always surfaces errors as HRESULTs.
+    #[test]
+    fn test_raw_win32_access_denied_is_not_transient() {
+        assert!(
+            !is_transient_error(0x00000005),
+            "0x00000005 (raw Win32 code) should not be treated as transient HRESULT"
+        );
+    }
+
+    /// The raw Win32 ERROR_TIMEOUT decimal value 1460 must NOT be in the
+    /// list; 0x800705B4 (its HRESULT form) already covers it.
+    #[test]
+    fn test_raw_win32_timeout_1460_is_not_transient() {
+        assert!(
+            !is_transient_error(1460),
+            "Raw Win32 code 1460 should not be in TRANSIENT_HRESULTS; use HRESULT 0x800705B4"
+        );
+    }
+
+    /// The HRESULT form of ERROR_TIMEOUT MUST be retried.
+    #[test]
+    fn test_timeout_hresult_is_transient() {
+        assert!(
+            is_transient_error(0x800705B4),
+            "0x800705B4 (HRESULT ERROR_TIMEOUT) must be treated as transient"
+        );
     }
 }
