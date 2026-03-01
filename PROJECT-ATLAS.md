@@ -1,6 +1,6 @@
 # EventSleuth - Project Atlas
 
-> **Last updated**: 2026-03-01 (v1.0.2)
+> **Last updated**: 2026-03-01 (v1.0.4)
 
 ## System Purpose
 
@@ -126,7 +126,7 @@ A separate [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the same ch
 
 ### Release
 
-[update-application.ps1](update-application.ps1): Automated release pipeline.
+[update-application.ps1](update-application.ps1): Automated release pipeline (Rule 18 compliant).
 
 ```powershell
 # Interactive
@@ -136,10 +136,13 @@ A separate [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the same ch
 .\update-application.ps1 -Version "1.1.0" -Notes "Added feature X"
 
 # Force (skip duplicate version check)
-.\update-application.ps1 -Version "1.0.2" -Notes "Hotfix" -Force
+.\update-application.ps1 -Version "1.0.4" -Notes "Hotfix" -Force
+
+# Dry run (no changes)
+.\update-application.ps1 -Version "1.1.0" -Notes "Test" -DryRun
 ```
 
-Steps: version validation -> Cargo.toml update -> pre-release build + test -> git commit -> delete old tags/releases -> create annotated tag -> push (triggers CI).
+Steps: version validation -> release notes collection -> git state checks -> manifest snapshot for rollback -> version update + lockfile refresh -> summary + diff + confirmation -> pre-release build -> quality gates (fmt check, clippy, tests) -> commit -> tag + push -> prune older tags/releases (triggers CI). On failure, manifest and lockfile are restored from snapshot.
 
 ## Configuration
 
