@@ -4,7 +4,9 @@
 //! channel enumeration, and in-memory filtering.
 
 pub mod channel_enumerator;
+mod event_format;
 pub mod event_reader;
 pub mod event_record;
 pub mod filter;
+pub mod filter_preset;
 pub mod xml_parser;

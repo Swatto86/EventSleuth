@@ -133,6 +133,53 @@ impl EventSleuthApp {
                 );
             }
 
+            ui.separator();
+
+            // ── Statistics button ───────────────────────────────────
+            let stats_text = "\u{1F4CA} Stats";
+            let stats_btn =
+                egui::Button::new(egui::RichText::new(stats_text).color(if self.show_stats {
+                    theme::accent(self.dark_mode)
+                } else {
+                    theme::text_primary(self.dark_mode)
+                }));
+            let has_events_for_stats = !self.all_events.is_empty();
+            if ui
+                .add_enabled(has_events_for_stats, stats_btn)
+                .on_hover_text("Show event statistics summary")
+                .on_disabled_hover_text("Load events first")
+                .clicked()
+            {
+                self.show_stats = !self.show_stats;
+                if self.show_stats {
+                    self.stats_dirty = true;
+                }
+            }
+
+            // ── Column visibility dropdown ──────────────────────────
+            ui.menu_button("\u{1F4CB} Columns", |ui| {
+                ui.label(
+                    egui::RichText::new("Visible columns")
+                        .color(theme::text_secondary(self.dark_mode))
+                        .strong(),
+                );
+                ui.separator();
+                ui.checkbox(&mut self.column_visibility.timestamp, "Timestamp");
+                ui.checkbox(&mut self.column_visibility.level, "Level");
+                ui.checkbox(&mut self.column_visibility.event_id, "Event ID");
+                ui.checkbox(&mut self.column_visibility.provider, "Provider");
+                ui.checkbox(&mut self.column_visibility.channel, "Channel");
+                ui.checkbox(&mut self.column_visibility.computer, "Computer");
+                ui.checkbox(&mut self.column_visibility.message, "Message");
+                ui.separator();
+                if ui.small_button("Reset to defaults").clicked() {
+                    self.column_visibility = crate::app::ColumnVisibility::default();
+                    ui.close_menu();
+                }
+            })
+            .response
+            .on_hover_text("Show or hide table columns");
+
             // ── Right-aligned app title + about + theme toggle ─────────
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let about_btn = ui.add(

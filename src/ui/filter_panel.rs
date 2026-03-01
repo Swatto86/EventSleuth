@@ -239,6 +239,26 @@ impl EventSleuthApp {
             {
                 changed = true;
             }
+            if ui
+                .checkbox(&mut self.filter.use_regex, "Regex")
+                .on_hover_text(
+                    "Use regular expressions for text search.\nExample: error|fail|crash",
+                )
+                .changed()
+            {
+                changed = true;
+            }
+            // Show regex error indicator when pattern is invalid
+            if self.filter.use_regex
+                && !self.filter.text_search.is_empty()
+                && self.filter.compiled_regex.is_none()
+            {
+                ui.label(
+                    egui::RichText::new("\u{26A0} Invalid regex")
+                        .color(theme::level_color(3, dark))
+                        .small(),
+                );
+            }
         });
 
         ui.add_space(theme::ITEM_SPACING);
@@ -319,6 +339,57 @@ impl EventSleuthApp {
                     }
                     ui.end_row();
                 });
+        });
+
+        ui.add_space(theme::SECTION_SPACING);
+
+        // ── Bookmarks toggle ────────────────────────────────────────
+        ui.horizontal(|ui| {
+            if ui
+                .checkbox(
+                    &mut self.show_bookmarks_only,
+                    egui::RichText::new("\u{2B50} Bookmarks only").strong(),
+                )
+                .on_hover_text("Show only bookmarked/pinned events")
+                .changed()
+            {
+                changed = true;
+            }
+            if !self.bookmarked_indices.is_empty() {
+                ui.label(
+                    egui::RichText::new(format!("{} pinned", self.bookmarked_indices.len()))
+                        .color(theme::text_dim(dark))
+                        .small(),
+                );
+            }
+        });
+
+        ui.add_space(theme::SECTION_SPACING);
+
+        // ── Max events per channel ──────────────────────────────────
+        egui::CollapsingHeader::new(
+            egui::RichText::new("\u{2699}\u{FE0F} Settings").strong(),
+        )
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Max events per source")
+                    .color(theme::text_dim(dark)),
+            );
+            let mut max_str = self.max_events_per_channel.to_string();
+            let re = ui.add(
+                egui::TextEdit::singleline(&mut max_str)
+                    .desired_width(100.0)
+                    .hint_text("500000"),
+            );
+            if re.changed() {
+                if let Ok(val) = max_str.replace(',', "").trim().parse::<usize>() {
+                    self.max_events_per_channel = val.clamp(1_000, 10_000_000);
+                }
+            }
+            re.on_hover_text(
+                "Maximum events to load per source channel.\nHigher values use more memory.\nRange: 1,000 - 10,000,000",
+            );
         });
 
         ui.add_space(theme::SECTION_SPACING);

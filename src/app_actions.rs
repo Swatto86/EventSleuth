@@ -275,6 +275,7 @@ impl EventSleuthApp {
             self.filter.time_to,
             tx,
             cancel.clone(),
+            self.max_events_per_channel,
         );
 
         self.reader_rx = Some(rx);
@@ -312,6 +313,7 @@ impl EventSleuthApp {
             None,
             tx,
             cancel.clone(),
+            self.max_events_per_channel,
         );
 
         self.reader_rx = Some(rx);
@@ -375,10 +377,11 @@ impl EventSleuthApp {
             let name = self.preset_name_input.trim().to_owned();
             // Replace existing preset with the same name, or append
             if let Some(existing) = self.filter_presets.iter_mut().find(|p| p.name == name) {
-                *existing = crate::core::filter::FilterPreset::from_state(&name, &self.filter);
+                *existing =
+                    crate::core::filter_preset::FilterPreset::from_state(&name, &self.filter);
             } else {
                 self.filter_presets
-                    .push(crate::core::filter::FilterPreset::from_state(
+                    .push(crate::core::filter_preset::FilterPreset::from_state(
                         &name,
                         &self.filter,
                     ));
