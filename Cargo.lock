@@ -1376,7 +1376,7 @@ dependencies = [
 
 [[package]]
 name = "eventsleuth"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "chrono",
  "crossbeam-channel",
