@@ -257,6 +257,11 @@ fn read_channel(
     let mut count = 0usize;
     let mut handles = vec![0isize; EVT_BATCH_SIZE];
 
+    // Reusable buffers shared across all events in this channel read,
+    // eliminating per-event heap allocations for EvtRender/EvtFormatMessage.
+    let mut render_buf: Vec<u16> = vec![0; EVT_RENDER_BUFFER_SIZE];
+    let mut format_buf: Vec<u16> = vec![0; EVT_FORMAT_BUFFER_SIZE];
+
     loop {
         if cancel.load(Ordering::Relaxed) {
             break;
@@ -314,7 +319,7 @@ fn read_channel(
         let mut batch = Vec::with_capacity(returned as usize);
         for &event_handle in &handles[..returned as usize] {
             // Render the event to XML
-            let xml = match render_event_xml(event_handle) {
+            let xml = match render_event_xml(event_handle, &mut render_buf) {
                 Ok(xml) => xml,
                 Err(e) => {
                     tracing::trace!("Failed to render event XML: {}", e);
@@ -327,7 +332,8 @@ fn read_channel(
             };
 
             // Try to format the message via EvtFormatMessage
-            let formatted_msg = try_format_message(event_handle, &xml, publisher_cache);
+            let formatted_msg =
+                try_format_message(event_handle, &xml, publisher_cache, &mut format_buf);
 
             // Parse XML into an EventRecord
             match parse_event_xml(&xml, channel, formatted_msg) {
@@ -359,8 +365,17 @@ fn read_channel(
 }
 
 /// Render a single event handle to an XML string via `EvtRender`.
-fn render_event_xml(event_handle: isize) -> Result<String, EventSleuthError> {
-    let mut buffer: Vec<u16> = vec![0; EVT_RENDER_BUFFER_SIZE];
+///
+/// Uses a caller-provided reusable buffer to avoid per-event heap allocation.
+/// The buffer grows if needed and retains its size for subsequent calls.
+fn render_event_xml(
+    event_handle: isize,
+    buffer: &mut Vec<u16>,
+) -> Result<String, EventSleuthError> {
+    // Ensure minimum capacity; the buffer is reused across events.
+    if buffer.len() < EVT_RENDER_BUFFER_SIZE {
+        buffer.resize(EVT_RENDER_BUFFER_SIZE, 0);
+    }
     let mut buffer_used = 0u32;
     let mut property_count = 0u32;
 
@@ -423,11 +438,13 @@ fn render_event_xml(event_handle: isize) -> Result<String, EventSleuthError> {
 ///
 /// Returns `Some(message)` on success, `None` if formatting fails (common
 /// for events from uninstalled providers). Caches publisher metadata handles
-/// in `publisher_cache`.
+/// in `publisher_cache`. Uses a caller-provided reusable buffer to avoid
+/// per-event heap allocation.
 fn try_format_message(
     event_handle: isize,
     xml: &str,
     publisher_cache: &mut HashMap<String, EVT_HANDLE>,
+    buffer: &mut Vec<u16>,
 ) -> Option<String> {
     // Extract provider name from XML to look up publisher metadata.
     // A lightweight extraction to avoid full XML parse just for the name.
@@ -457,8 +474,10 @@ fn try_format_message(
         }
     };
 
-    // Format the message
-    let mut buffer: Vec<u16> = vec![0; 4096];
+    // Format the message (reuse caller-provided buffer)
+    if buffer.len() < EVT_FORMAT_BUFFER_SIZE {
+        buffer.resize(EVT_FORMAT_BUFFER_SIZE, 0);
+    }
     let mut used = 0u32;
 
     // SAFETY: pub_handle and event_handle are valid handles.

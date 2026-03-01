@@ -383,14 +383,19 @@ impl EventSleuthApp {
     }
 
     /// Rebuild `filtered_indices` by applying the current filter to all events.
+    ///
+    /// Reuses the existing `filtered_indices` allocation to avoid a heap
+    /// allocation on every filter pass (significant for repeated filtering
+    /// during text search with debounce).
     pub fn apply_filter(&mut self) {
-        self.filtered_indices = self
-            .all_events
-            .iter()
-            .enumerate()
-            .filter(|(_, event)| self.filter.matches(event))
-            .map(|(i, _)| i)
-            .collect();
+        self.filtered_indices.clear();
+        self.filtered_indices.extend(
+            self.all_events
+                .iter()
+                .enumerate()
+                .filter(|(_, event)| self.filter.matches(event))
+                .map(|(i, _)| i),
+        );
 
         self.sort_events();
 
@@ -409,12 +414,15 @@ impl EventSleuthApp {
     }
 
     /// Sort `filtered_indices` by the current sort column and direction.
+    ///
+    /// Uses `sort_unstable_by` for better performance on index slices
+    /// (no stability guarantees needed for indices; avoids temporary allocation).
     pub fn sort_events(&mut self) {
         let events = &self.all_events;
         let col = self.sort_column;
         let asc = self.sort_ascending;
 
-        self.filtered_indices.sort_by(|&a, &b| {
+        self.filtered_indices.sort_unstable_by(|&a, &b| {
             let ea = &events[a];
             let eb = &events[b];
             let ord = match col {

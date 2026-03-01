@@ -145,6 +145,34 @@ impl Default for FilterState {
     }
 }
 
+/// Case-insensitive substring search without heap allocation for ASCII content.
+///
+/// Assumes `needle_lower` is already fully lowercased. Uses a fast byte-level
+/// comparison for ASCII-only haystacks (typical of Windows Event Log data),
+/// falling back to `to_lowercase().contains()` only when non-ASCII is detected.
+fn contains_case_insensitive(haystack: &str, needle_lower: &str) -> bool {
+    if needle_lower.is_empty() {
+        return true;
+    }
+    let n = needle_lower.as_bytes();
+    let h = haystack.as_bytes();
+    if n.len() > h.len() {
+        return false;
+    }
+    // Fast path: byte-level ASCII comparison (zero-alloc, covers ~99% of event log data)
+    let found = h
+        .windows(n.len())
+        .any(|w| w.iter().zip(n).all(|(a, b)| a.to_ascii_lowercase() == *b));
+    if found {
+        return true;
+    }
+    // Slow path: full Unicode lowering only if haystack contains non-ASCII
+    if !haystack.is_ascii() {
+        return haystack.to_lowercase().contains(needle_lower);
+    }
+    false
+}
+
 impl FilterState {
     /// Re-parse the raw `event_id_input` string into the `include_ids` and
     /// `exclude_ids` sets. Call this whenever the input field changes.
@@ -254,12 +282,11 @@ impl FilterState {
             }
         }
 
-        // 4. Provider substring — O(n) where n = provider name length
-        if !self.provider_filter.is_empty() {
-            let provider_lower = event.provider_name.to_lowercase();
-            if !provider_lower.contains(self.provider_filter_lower.as_str()) {
-                return false;
-            }
+        // 4. Provider substring -- zero-alloc for ASCII via contains_case_insensitive
+        if !self.provider_filter.is_empty()
+            && !contains_case_insensitive(&event.provider_name, &self.provider_filter_lower)
+        {
+            return false;
         }
 
         // 5. Text search — most expensive, checked last
@@ -304,24 +331,29 @@ impl FilterState {
     ///
     /// Uses `text_search_lower` (cached by `parse_event_ids`) to avoid
     /// re-allocating the lowered search term once per event.
+    /// Case-insensitive text search across event fields.
+    ///
+    /// Uses [`contains_case_insensitive`] for zero-allocation matching on
+    /// ASCII content (typical of Windows Event Log data). Fields are checked
+    /// cheapest-first with early return on match.
     fn text_search_case_insensitive(&self, event: &EventRecord) -> bool {
         let q = self.text_search_lower.as_str();
-        if event.message.to_lowercase().contains(q) {
+        if contains_case_insensitive(&event.message, q) {
             return true;
         }
-        if event.provider_name.to_lowercase().contains(q) {
+        if contains_case_insensitive(&event.provider_name, q) {
             return true;
         }
-        if event.channel.to_lowercase().contains(q) {
+        if contains_case_insensitive(&event.channel, q) {
             return true;
         }
         for (k, v) in &event.event_data {
-            if k.to_lowercase().contains(q) || v.to_lowercase().contains(q) {
+            if contains_case_insensitive(k, q) || contains_case_insensitive(v, q) {
                 return true;
             }
         }
         // raw_xml search is expensive, do it last
-        if event.raw_xml.to_lowercase().contains(q) {
+        if contains_case_insensitive(&event.raw_xml, q) {
             return true;
         }
         false
