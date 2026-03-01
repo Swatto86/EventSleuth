@@ -209,8 +209,18 @@ impl FilterState {
                     } else {
                         (end, start)
                     };
-                    // Cap range to prevent accidental huge allocations
-                    let capped_hi = hi.min(lo + 100_000);
+                    // Cap range to prevent accidental huge allocations.
+                    // Use saturating_add to avoid u32 overflow when lo is large.
+                    let capped_hi = hi.min(lo.saturating_add(100_000));
+                    if capped_hi < hi {
+                        tracing::warn!(
+                            "Event ID range {}-{} capped to {}-{} (max 100,000 IDs per range)",
+                            lo,
+                            hi,
+                            lo,
+                            capped_hi,
+                        );
+                    }
                     for id in lo..=capped_hi {
                         if negate {
                             self.exclude_ids.insert(id);
@@ -228,14 +238,19 @@ impl FilterState {
             }
         }
 
-        // Update cached lowercase search strings for case-insensitive matching.
+        // Also refresh the derived text-search caches. This is the
+        // canonical call-site; see `update_search_cache` for the full list
+        // of fields it touches.
         self.update_search_cache();
     }
 
     /// Refresh the cached lowercase versions of text search fields.
     ///
-    /// Call this after modifying `text_search` or `provider_filter` to keep
-    /// the derived caches in sync.
+    /// **Must** be called after modifying `text_search` or `provider_filter`
+    /// to keep the derived caches in sync. Currently also called by
+    /// [`parse_event_ids`] as a convenience, but callers that change only
+    /// the text fields (without touching Event IDs) should call this
+    /// method directly.
     pub fn update_search_cache(&mut self) {
         self.text_search_lower = self.text_search.to_lowercase();
         self.provider_filter_lower = self.provider_filter.to_lowercase();
