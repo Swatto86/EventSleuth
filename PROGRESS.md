@@ -6,7 +6,7 @@
 
 - **Debug build:** ✅ Compiles — zero errors, zero warnings
 - **Release build:** ✅ Compiles — optimised, LTO, stripped symbols
-- **Unit tests:** ✅ 125/125 passing
+- **Unit tests:** ✅ 147/147 passing
 - **App launches:** ✅ GUI window opens, events load from Application/System sources
 - **CI/CD:** ✅ GitHub Actions workflow for automated release builds
 - **Single instance:** ✅ Named mutex prevents duplicate instances
