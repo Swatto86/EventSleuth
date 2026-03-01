@@ -168,34 +168,36 @@ impl EventSleuthApp {
             .max_height(max_h)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                // Recompute stats if needed
-                if self.stats_dirty {
-                    self.stats_cache = self.compute_stats();
-                    self.stats_dirty = false;
-                }
+                    // Recompute stats if needed
+                    if self.stats_dirty {
+                        self.stats_cache = self.compute_stats();
+                        self.stats_dirty = false;
+                    }
 
-                let stats = &self.stats_cache;
-                let dark = self.dark_mode;
+                    let stats = &self.stats_cache;
+                    let dark = self.dark_mode;
 
-                if stats.total == 0 {
+                    if stats.total == 0 {
+                        ui.label(
+                            egui::RichText::new("No events to analyse")
+                                .color(theme::text_dim(dark))
+                                .italics(),
+                        );
+                        return;
+                    }
+
                     ui.label(
-                        egui::RichText::new("No events to analyse")
-                            .color(theme::text_dim(dark))
-                            .italics(),
+                        egui::RichText::new(format!("{} filtered events", stats.total))
+                            .color(theme::accent(dark))
+                            .strong(),
                     );
-                    return;
-                }
 
-                ui.label(
-                    egui::RichText::new(format!("{} filtered events", stats.total))
-                        .color(theme::accent(dark))
-                        .strong(),
-                );
+                    ui.add_space(theme::SECTION_SPACING);
 
-                ui.add_space(theme::SECTION_SPACING);
-
-                // ── Counts by level ─────────────────────────────────
-                egui::CollapsingHeader::new(egui::RichText::new("\u{1F4CA} By Severity").strong())
+                    // ── Counts by level ─────────────────────────────────
+                    egui::CollapsingHeader::new(
+                        egui::RichText::new("\u{1F4CA} By Severity").strong(),
+                    )
                     .default_open(true)
                     .show(ui, |ui| {
                         let level_names = [
@@ -255,124 +257,125 @@ impl EventSleuthApp {
                         }
                     });
 
-                ui.add_space(theme::SECTION_SPACING);
+                    ui.add_space(theme::SECTION_SPACING);
 
-                // ── Top providers ───────────────────────────────────
-                egui::CollapsingHeader::new(
-                    egui::RichText::new("\u{1F3F7}\u{FE0F} Top Providers").strong(),
-                )
-                .default_open(true)
-                .show(ui, |ui| {
-                    if stats.top_providers.is_empty() {
-                        ui.label(
-                            egui::RichText::new("No providers")
-                                .color(theme::text_dim(dark))
-                                .italics(),
-                        );
-                        return;
-                    }
-                    let max_count = stats
-                        .top_providers
-                        .first()
-                        .map(|(_, c)| *c)
-                        .unwrap_or(1)
-                        .max(1);
-
-                    for (name, count) in &stats.top_providers {
-                        ui.horizontal(|ui| {
-                            // Truncate long provider names
-                            let display_name = if name.len() > 35 {
-                                let end = name
-                                    .char_indices()
-                                    .nth(32)
-                                    .map(|(i, _)| i)
-                                    .unwrap_or(name.len());
-                                format!("{}...", &name[..end])
-                            } else {
-                                name.clone()
-                            };
+                    // ── Top providers ───────────────────────────────────
+                    egui::CollapsingHeader::new(
+                        egui::RichText::new("\u{1F3F7}\u{FE0F} Top Providers").strong(),
+                    )
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        if stats.top_providers.is_empty() {
                             ui.label(
-                                egui::RichText::new(display_name).color(theme::text_primary(dark)),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.label(
-                                        egui::RichText::new(count.to_string())
-                                            .color(theme::text_secondary(dark)),
-                                    );
-                                },
-                            );
-                        });
-                        // Mini bar
-                        let bar_frac = *count as f32 / max_count as f32;
-                        let (rect, _) = ui.allocate_exact_size(
-                            egui::vec2(ui.available_width(), 3.0),
-                            egui::Sense::hover(),
-                        );
-                        ui.painter().rect_filled(
-                            egui::Rect::from_min_size(
-                                rect.min,
-                                egui::vec2(rect.width() * bar_frac, rect.height()),
-                            ),
-                            1.5,
-                            theme::accent(dark),
-                        );
-                        ui.add_space(1.0);
-                    }
-                });
-
-                ui.add_space(theme::SECTION_SPACING);
-
-                // ── Hourly histogram ────────────────────────────────
-                egui::CollapsingHeader::new(
-                    egui::RichText::new("\u{1F552} Events per Hour").strong(),
-                )
-                .default_open(false)
-                .show(ui, |ui| {
-                    if stats.hourly_histogram.is_empty() {
-                        ui.label(
-                            egui::RichText::new("Insufficient data")
-                                .color(theme::text_dim(dark))
-                                .italics(),
-                        );
-                        return;
-                    }
-
-                    let max_count = stats
-                        .hourly_histogram
-                        .iter()
-                        .map(|(_, c)| *c)
-                        .max()
-                        .unwrap_or(1)
-                        .max(1);
-
-                    let bar_height = 14.0;
-                    let total_width = ui.available_width();
-
-                    for (label, count) in &stats.hourly_histogram {
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new(label)
+                                egui::RichText::new("No providers")
                                     .color(theme::text_dim(dark))
-                                    .monospace()
-                                    .small(),
+                                    .italics(),
                             );
+                            return;
+                        }
+                        let max_count = stats
+                            .top_providers
+                            .first()
+                            .map(|(_, c)| *c)
+                            .unwrap_or(1)
+                            .max(1);
+
+                        for (name, count) in &stats.top_providers {
+                            ui.horizontal(|ui| {
+                                // Truncate long provider names
+                                let display_name = if name.len() > 35 {
+                                    let end = name
+                                        .char_indices()
+                                        .nth(32)
+                                        .map(|(i, _)| i)
+                                        .unwrap_or(name.len());
+                                    format!("{}...", &name[..end])
+                                } else {
+                                    name.clone()
+                                };
+                                ui.label(
+                                    egui::RichText::new(display_name)
+                                        .color(theme::text_primary(dark)),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.label(
+                                            egui::RichText::new(count.to_string())
+                                                .color(theme::text_secondary(dark)),
+                                        );
+                                    },
+                                );
+                            });
+                            // Mini bar
                             let bar_frac = *count as f32 / max_count as f32;
-                            let bar_width = (total_width - 80.0) * bar_frac;
                             let (rect, _) = ui.allocate_exact_size(
-                                egui::vec2(bar_width.max(2.0), bar_height),
+                                egui::vec2(ui.available_width(), 3.0),
                                 egui::Sense::hover(),
                             );
-                            ui.painter().rect_filled(rect, 2.0, theme::accent_dim(dark));
-                            ui.label(
-                                egui::RichText::new(count.to_string())
-                                    .color(theme::text_secondary(dark))
-                                    .small(),
+                            ui.painter().rect_filled(
+                                egui::Rect::from_min_size(
+                                    rect.min,
+                                    egui::vec2(rect.width() * bar_frac, rect.height()),
+                                ),
+                                1.5,
+                                theme::accent(dark),
                             );
-                        });
-                    }
-                });
+                            ui.add_space(1.0);
+                        }
+                    });
+
+                    ui.add_space(theme::SECTION_SPACING);
+
+                    // ── Hourly histogram ────────────────────────────────
+                    egui::CollapsingHeader::new(
+                        egui::RichText::new("\u{1F552} Events per Hour").strong(),
+                    )
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        if stats.hourly_histogram.is_empty() {
+                            ui.label(
+                                egui::RichText::new("Insufficient data")
+                                    .color(theme::text_dim(dark))
+                                    .italics(),
+                            );
+                            return;
+                        }
+
+                        let max_count = stats
+                            .hourly_histogram
+                            .iter()
+                            .map(|(_, c)| *c)
+                            .max()
+                            .unwrap_or(1)
+                            .max(1);
+
+                        let bar_height = 14.0;
+                        let total_width = ui.available_width();
+
+                        for (label, count) in &stats.hourly_histogram {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(label)
+                                        .color(theme::text_dim(dark))
+                                        .monospace()
+                                        .small(),
+                                );
+                                let bar_frac = *count as f32 / max_count as f32;
+                                let bar_width = (total_width - 80.0) * bar_frac;
+                                let (rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(bar_width.max(2.0), bar_height),
+                                    egui::Sense::hover(),
+                                );
+                                ui.painter().rect_filled(rect, 2.0, theme::accent_dim(dark));
+                                ui.label(
+                                    egui::RichText::new(count.to_string())
+                                        .color(theme::text_secondary(dark))
+                                        .small(),
+                                );
+                            });
+                        }
+                    });
                 }); // ScrollArea
             });
 
