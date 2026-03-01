@@ -363,22 +363,25 @@ impl EventSleuthApp {
 
 #[cfg(test)]
 mod tail_datetime_tests {
-    /// Regression test for B2: adding 1 ms to a near-max DateTime<Utc> must not
-    /// panic.  The fix uses `checked_add_signed` so overflow falls back gracefully
-    /// rather than producing a panic in the reader thread startup path.
+    /// Regression test for B2: adding 1 ms to DateTime<Utc>::MAX must return
+    /// None (overflow) so the tail poll is skipped rather than re-delivering
+    /// the last event on every tick.
+    ///
+    /// The old code used `.unwrap_or(t)` which fell back to the un-incremented
+    /// timestamp; start_tail_query would then re-query from the exact same
+    /// timestamp each tick, causing the last event to be re-delivered on every
+    /// live-tail cycle (Bug fix: infinite re-delivery on DateTime::MAX overflow).
     #[test]
-    fn tail_from_near_max_datetime_does_not_panic() {
+    fn tail_from_near_max_datetime_overflow_returns_none() {
         use chrono::Duration;
         // Use the maximum representable chrono::DateTime<chrono::Utc> value.
         let max_dt = chrono::DateTime::<chrono::Utc>::MAX_UTC;
-        // This mirrors the logic in start_tail_query exactly.
-        let tail_from = max_dt
-            .checked_add_signed(Duration::milliseconds(1))
-            .unwrap_or(max_dt);
-        // On overflow the fallback must equal the original timestamp.
-        assert_eq!(
-            tail_from, max_dt,
-            "overflow fallback must equal the original timestamp"
+        // The new logic uses and_then which propagates None on overflow.
+        let tail_from = max_dt.checked_add_signed(Duration::milliseconds(1));
+        // On overflow checked_add_signed returns None, NOT the original timestamp.
+        assert!(
+            tail_from.is_none(),
+            "adding 1 ms to DateTime::MAX must return None (overflow), not wrap"
         );
     }
 
@@ -403,15 +406,23 @@ impl EventSleuthApp {
             return;
         }
 
-        // Find the newest timestamp in the current data
+        // Find the newest timestamp in the current data.
         let newest = self.all_events.iter().map(|e| e.timestamp).max();
         // Use checked arithmetic to guard against overflow at DateTime<Utc>::MAX.
-        // If the add overflows (extremely unlikely in practice), fall back to the
-        // un-incremented timestamp so we may re-deliver the last event rather than
-        // silently lose all future tail events.
-        let tail_from = newest.map(|t| {
-            t.checked_add_signed(chrono::Duration::milliseconds(1))
-                .unwrap_or(t)
+        // If the add overflows, log a warning and skip the tail poll rather than
+        // silently re-delivering the last event on every tick (which happened
+        // with the old `unwrap_or(t)` fallback — Bug fix: infinite re-delivery).
+        let tail_from = newest.and_then(|t| {
+            match t.checked_add_signed(chrono::Duration::milliseconds(1)) {
+                Some(advanced) => Some(advanced),
+                None => {
+                    tracing::warn!(
+                        "start_tail_query: newest timestamp is at DateTime::MAX, \
+                         skipping tail poll to avoid re-delivering last event"
+                    );
+                    None // None causes spawn_reader_thread to use filter.time_from
+                }
+            }
         });
 
         let (tx, rx) = crossbeam_channel::bounded(constants::CHANNEL_BOUND);

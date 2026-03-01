@@ -256,11 +256,14 @@ fn load_app_icon() -> Option<std::sync::Arc<egui::IconData>> {
         ICO_BYTES[dir_offset + 15],
     ]) as usize;
 
-    if data_offset + data_size > ICO_BYTES.len() {
+    // Use checked_add to guard against integer overflow on malformed ICO data
+    // where the sum of offset + size would wrap past usize::MAX (Bug fix: overflow).
+    let data_end = data_offset.checked_add(data_size)?;
+    if data_end > ICO_BYTES.len() {
         return None;
     }
 
-    let png_data = &ICO_BYTES[data_offset..data_offset + data_size];
+    let png_data = &ICO_BYTES[data_offset..data_end];
 
     // Decode the PNG into RGBA pixels
     let img = image::load_from_memory(png_data).ok()?;

@@ -1,12 +1,12 @@
 # EventSleuth — Progress Tracker
 
-> Last updated: 2026-03-02
+> Last updated: 2026-03-01
 
 ## Build Status
 
 - **Debug build:** ✅ Compiles — zero errors, zero warnings
 - **Release build:** ✅ Compiles — optimised, LTO, stripped symbols
-- **Unit tests:** ✅ 147/147 passing
+- **Unit tests:** ✅ 125/125 passing
 - **App launches:** ✅ GUI window opens, events load from Application/System sources
 - **CI/CD:** ✅ GitHub Actions workflow for automated release builds
 - **Single instance:** ✅ Named mutex prevents duplicate instances
@@ -190,6 +190,7 @@ EventSleuth/
 | **Bug audit – keyboard navigation** | Navigation keys (arrows/Home/End/PageUp/Down) now suppressed while a text-edit field has keyboard focus, preventing inadvertent table jumps while typing filter text. |
 | **Bug audit – max-events feedback** | Filter panel now shows a warning label when the typed max-events value is outside the valid range (1,000–10,000,000), so the effective clamped value is always visible. |
 | **Bug audit – live-tail resource cap** | Added `MAX_TOTAL_EVENTS_CAP` (4x `MAX_EVENTS_PER_CHANNEL`) constant; live-tail queries evict the oldest events when the cap is exceeded, preventing unbounded memory growth on long-running sessions (Rule 11). |
+| **Bug audit – full codebase audit 2026-03-01** | Five bugs found and fixed across logic, runtime, and UX categories: (1) Reader-thread panic leaves infinite loading spinner — `process_messages` now distinguishes `TryRecvError::Disconnected` from `::Empty` and clears loading state on unexpected disconnection. (2) Zero-length `LayoutSection` in Unicode case-insensitive search highlight — the `to_lowercase()` char-expansion path in `build_highlighted_job` skips sections whose computed byte range is empty. (3) ICO bounds check integer-overflow — `data_offset + data_size` now uses `checked_add` (`?`) to avoid wrapping on malformed ICO data. (4) Live-tail overflow re-delivered last event every tick — the `unwrap_or(t)` fallback on `DateTime::MAX` overflow replaced by logging a warning and skipping the poll (returning `None`) so no duplicate events are delivered. (5) `apply_filter` selection-restoration clamping never fired — the post-restoration `if let Some(idx)` guard could never be true after `position()` sets to a valid index; refactored to clamp to last row when the selected event is filtered out (the originally documented intent). |
 
 ---
 

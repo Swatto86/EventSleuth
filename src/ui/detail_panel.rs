@@ -481,25 +481,38 @@ impl EventSleuthApp {
                 match lowered[pos..].find(search_lower.as_str()) {
                     Some(rel_start) => {
                         let abs_start = pos + rel_start;
-                        if abs_start > pos {
+                        let orig_before_start = low_to_orig[pos];
+                        let orig_match_start = low_to_orig[abs_start];
+                        let orig_match_end = low_to_orig[abs_start + needle_len];
+                        // Guard: skip zero-length sections.
+                        // `to_lowercase()` can expand a single char into multiple
+                        // chars (e.g. 'ẞ' -> "ss"), so two adjacent positions in the
+                        // lowered string can map to the same original byte offset.
+                        // Pushing a LayoutSection with start == end would produce a
+                        // degenerate section that confuses egui's LayoutJob renderer
+                        // (Bug fix: zero-length LayoutSection on Unicode expansion).
+                        if orig_before_start < orig_match_start {
                             job.sections.push(LayoutSection {
                                 leading_space: 0.0,
-                                byte_range: low_to_orig[pos]..low_to_orig[abs_start],
+                                byte_range: orig_before_start..orig_match_start,
                                 format: normal_fmt.clone(),
                             });
                         }
-                        job.sections.push(LayoutSection {
-                            leading_space: 0.0,
-                            byte_range: low_to_orig[abs_start]..low_to_orig[abs_start + needle_len],
-                            format: highlight_fmt.clone(),
-                        });
+                        if orig_match_start < orig_match_end {
+                            job.sections.push(LayoutSection {
+                                leading_space: 0.0,
+                                byte_range: orig_match_start..orig_match_end,
+                                format: highlight_fmt.clone(),
+                            });
+                        }
                         pos = abs_start + needle_len;
                     }
                     None => {
-                        if pos < lowered.len() {
+                        let orig_tail_start = low_to_orig[pos];
+                        if orig_tail_start < text.len() {
                             job.sections.push(LayoutSection {
                                 leading_space: 0.0,
-                                byte_range: low_to_orig[pos]..text.len(),
+                                byte_range: orig_tail_start..text.len(),
                                 format: normal_fmt.clone(),
                             });
                         }
