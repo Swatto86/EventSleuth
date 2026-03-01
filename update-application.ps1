@@ -33,9 +33,9 @@ function Write-Success { param($msg) Write-Host "  [OK] $msg" -ForegroundColor G
 function Write-Info    { param($msg) Write-Host "  [..] $msg" -ForegroundColor Cyan }
 function Write-Warn    { param($msg) Write-Host "  [!!] $msg" -ForegroundColor Yellow }
 function Write-Fail    { param($msg) Write-Host "  [FAIL] $msg" -ForegroundColor Red }
-function Write-Step    { param($num, $label) Write-Host "`n=== Step $num: $label ===" -ForegroundColor Magenta }
+function Write-Step    { param($num, $label) Write-Host "`n=== Step ${num}: $label ===" -ForegroundColor Magenta }
 
-function Rollback-Version {
+function Undo-VersionChange {
     param([string]$OriginalContent, [string]$FilePath)
     Write-Warn "Rolling back version change in $FilePath..."
     Set-Content $FilePath $OriginalContent -NoNewline
@@ -84,13 +84,13 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') {
 }
 
 # Parse versions for comparison
-function Parse-SemVer([string]$v) {
+function ConvertFrom-SemVer([string]$v) {
     $parts = $v -split '\.'
     return @{ Major = [int]$parts[0]; Minor = [int]$parts[1]; Patch = [int]$parts[2] }
 }
 
-$newVer = Parse-SemVer $Version
-$curVer = Parse-SemVer $currentVersion
+$newVer = ConvertFrom-SemVer $Version
+$curVer = ConvertFrom-SemVer $currentVersion
 
 # Check for duplicate
 if ($Version -eq $currentVersion -and -not $Force) {
@@ -125,7 +125,7 @@ $buildResult = & cargo build --release 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Fail "Release build failed:"
     Write-Host ($buildResult | Out-String)
-    Rollback-Version -OriginalContent $cargoOriginal -FilePath $cargoToml
+    Undo-VersionChange -OriginalContent $cargoOriginal -FilePath $cargoToml
     exit 1
 }
 Write-Success "Release build succeeded"
@@ -135,7 +135,7 @@ $testResult = & cargo test 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Fail "Tests failed:"
     Write-Host ($testResult | Out-String)
-    Rollback-Version -OriginalContent $cargoOriginal -FilePath $cargoToml
+    Undo-VersionChange -OriginalContent $cargoOriginal -FilePath $cargoToml
     exit 1
 }
 Write-Success "All tests passed"
@@ -214,7 +214,7 @@ Write-Host ""
 if (-not $Force) {
     $confirm = Read-Host "Proceed with release v$Version? (Y/n)"
     if ($confirm -eq 'n' -or $confirm -eq 'N') {
-        Rollback-Version -OriginalContent $cargoOriginal -FilePath $cargoToml
+        Undo-VersionChange -OriginalContent $cargoOriginal -FilePath $cargoToml
         Write-Fail "Aborted by user."
         exit 1
     }
@@ -232,7 +232,7 @@ if ($gitStatus) {
         if (-not $Force) {
             $confirm = Read-Host "Continue with uncommitted changes? (Y/n)"
             if ($confirm -eq 'n' -or $confirm -eq 'N') {
-                Rollback-Version -OriginalContent $cargoOriginal -FilePath $cargoToml
+                Undo-VersionChange -OriginalContent $cargoOriginal -FilePath $cargoToml
                 Write-Fail "Aborted by user."
                 exit 1
             }
@@ -249,7 +249,7 @@ git add $cargoToml
 git commit -m "chore: bump version to $Version"
 if ($LASTEXITCODE -ne 0) {
     Write-Fail "Git commit failed"
-    Rollback-Version -OriginalContent $cargoOriginal -FilePath $cargoToml
+    Undo-VersionChange -OriginalContent $cargoOriginal -FilePath $cargoToml
     exit 1
 }
 Write-Success "Committed version bump"
