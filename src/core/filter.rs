@@ -101,8 +101,12 @@ pub struct FilterState {
     pub text_search: String,
 
     /// Pre-computed lowercase version of `text_search` for efficient
-    /// case-insensitive matching. Updated by [`parse_event_ids`].
+    /// case-insensitive matching. Updated by [`update_search_cache`].
     pub text_search_lower: String,
+
+    /// Pre-computed lowercase version of `provider_filter` for efficient
+    /// case-insensitive matching. Updated by [`update_search_cache`].
+    pub provider_filter_lower: String,
 
     /// Start of time range filter. `None` = no lower bound.
     pub time_from_input: String,
@@ -131,6 +135,7 @@ impl Default for FilterState {
             provider_filter: String::new(),
             text_search: String::new(),
             text_search_lower: String::new(),
+            provider_filter_lower: String::new(),
             time_from_input: String::new(),
             time_to_input: String::new(),
             time_from: None,
@@ -195,8 +200,17 @@ impl FilterState {
             }
         }
 
-        // Update cached lowercase text search for case-insensitive matching
+        // Update cached lowercase search strings for case-insensitive matching.
+        self.update_search_cache();
+    }
+
+    /// Refresh the cached lowercase versions of text search fields.
+    ///
+    /// Call this after modifying `text_search` or `provider_filter` to keep
+    /// the derived caches in sync.
+    pub fn update_search_cache(&mut self) {
         self.text_search_lower = self.text_search.to_lowercase();
+        self.provider_filter_lower = self.provider_filter.to_lowercase();
     }
 
     /// Re-parse the time range input strings into `time_from` / `time_to`.
@@ -243,8 +257,7 @@ impl FilterState {
         // 4. Provider substring — O(n) where n = provider name length
         if !self.provider_filter.is_empty() {
             let provider_lower = event.provider_name.to_lowercase();
-            let filter_lower = self.provider_filter.to_lowercase();
-            if !provider_lower.contains(&filter_lower) {
+            if !provider_lower.contains(self.provider_filter_lower.as_str()) {
                 return false;
             }
         }

@@ -397,7 +397,11 @@ impl EventSleuthApp {
         // Clamp selection to valid range
         if let Some(idx) = self.selected_event_idx {
             if idx >= self.filtered_indices.len() {
-                self.selected_event_idx = None;
+                self.selected_event_idx = if self.filtered_indices.is_empty() {
+                    None
+                } else {
+                    Some(self.filtered_indices.len() - 1)
+                };
             }
         }
 
@@ -466,7 +470,15 @@ impl EventSleuthApp {
             };
             match rx.try_recv() {
                 Ok(p) => p,
-                Err(_) => return,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    // Sender dropped without sending (user cancelled the file dialog).
+                    self.import_rx = None;
+                    return;
+                }
+                Err(crossbeam_channel::TryRecvError::Empty) => {
+                    // Still waiting for the user to pick a file.
+                    return;
+                }
             }
         };
         self.import_rx = None;
