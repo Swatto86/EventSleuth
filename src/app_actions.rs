@@ -103,9 +103,19 @@ impl EventSleuthApp {
     /// and clears stale export messages after a timeout.
     pub fn process_export_messages(&mut self) {
         if let Some(rx) = &self.export_rx {
-            if let Ok(msg) = rx.try_recv() {
-                self.export_message = Some((msg, std::time::Instant::now()));
-                self.export_rx = None;
+            match rx.try_recv() {
+                Ok(msg) => {
+                    self.export_message = Some((msg, std::time::Instant::now()));
+                    self.export_rx = None;
+                }
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    // Sender dropped without sending (user cancelled the save dialog).
+                    // Clear the receiver so future exports are not permanently blocked.
+                    self.export_rx = None;
+                }
+                Err(crossbeam_channel::TryRecvError::Empty) => {
+                    // Still waiting for the background thread — nothing to do.
+                }
             }
         }
         // Clear export message after 4 seconds
