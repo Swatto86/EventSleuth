@@ -303,6 +303,11 @@ impl EventSleuthApp {
         self.progress_count = 0;
         self.progress_channel.clear();
 
+        // Bookmarks reference indices into all_events, so they become
+        // invalid after a file import and must be cleared.
+        self.bookmarked_indices.clear();
+        self.show_bookmarks_only = false;
+
         let (tx, rx) = crossbeam_channel::bounded(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));
 

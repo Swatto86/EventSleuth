@@ -54,12 +54,12 @@ impl EventSleuthApp {
                         .small_button("\u{2716} Clear all")
                         .on_hover_text("Reset every filter to its default (Ctrl+Shift+X)")
                         .clicked()
-                    {
-                        self.filter.clear();
-                        self.filter.parse_event_ids();
-                        self.filter.parse_time_range();
-                        self.needs_refilter = true;
-                    }
+                {
+                    self.filter.clear();
+                    self.filter.parse_event_ids();
+                    self.filter.parse_time_range();
+                    self.needs_refilter = true;
+                }
             });
         });
 

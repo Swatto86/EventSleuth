@@ -37,6 +37,11 @@ impl EventSleuthApp {
         self.progress_count = 0;
         self.progress_channel.clear();
 
+        // Bookmarks reference indices into all_events, so they become
+        // invalid after a reload and must be cleared.
+        self.bookmarked_indices.clear();
+        self.show_bookmarks_only = false;
+
         // Create communication channel and cancellation flag
         let (tx, rx) = crossbeam_channel::bounded::<ReaderMessage>(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));

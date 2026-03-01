@@ -198,6 +198,11 @@ impl EventSleuthApp {
                         .size(13.0),
                 );
             } else {
+                let regex_ref = if self.filter.use_regex {
+                    self.filter.compiled_regex.as_ref()
+                } else {
+                    None
+                };
                 let job = Self::build_highlighted_job(
                     msg,
                     search,
@@ -205,6 +210,7 @@ impl EventSleuthApp {
                     13.0,
                     false,
                     dark,
+                    regex_ref,
                 );
                 ui.label(job);
             }
@@ -256,6 +262,11 @@ impl EventSleuthApp {
                         if search.is_empty() {
                             ui.label(&display);
                         } else {
+                            let regex_ref = if self.filter.use_regex {
+                                self.filter.compiled_regex.as_ref()
+                            } else {
+                                None
+                            };
                             let job = Self::build_highlighted_job(
                                 &display,
                                 search,
@@ -263,6 +274,7 @@ impl EventSleuthApp {
                                 13.0,
                                 false,
                                 dark,
+                                regex_ref,
                             );
                             ui.label(job);
                         }
@@ -285,6 +297,11 @@ impl EventSleuthApp {
                     .color(theme::text_secondary(dark)),
             );
         } else {
+            let regex_ref = if self.filter.use_regex {
+                self.filter.compiled_regex.as_ref()
+            } else {
+                None
+            };
             let job = Self::build_highlighted_job(
                 &event.raw_xml,
                 search,
@@ -292,6 +309,7 @@ impl EventSleuthApp {
                 12.0,
                 true,
                 dark,
+                regex_ref,
             );
             ui.label(job);
         }
@@ -303,6 +321,10 @@ impl EventSleuthApp {
     /// Non-matching text uses [`theme::text_primary`] (or [`theme::text_secondary`]
     /// for monospace). Matched substrings get a [`theme::highlight_bg`]
     /// background and [`theme::highlight_text`] foreground.
+    ///
+    /// When `compiled_regex` is `Some`, highlighting uses regex match
+    /// positions instead of literal substring search. This keeps the
+    /// detail-panel highlights in sync with the regex filter.
     fn build_highlighted_job(
         text: &str,
         search: &str,
@@ -310,6 +332,7 @@ impl EventSleuthApp {
         font_size: f32,
         monospace: bool,
         dark: bool,
+        compiled_regex: Option<&regex::Regex>,
     ) -> egui::text::LayoutJob {
         use egui::text::{LayoutJob, LayoutSection};
         use egui::{FontFamily, FontId, TextFormat};
@@ -351,7 +374,49 @@ impl EventSleuthApp {
             return job;
         }
 
-        // Find all match positions
+        // ── Regex-based highlighting ────────────────────────────────
+        if let Some(re) = compiled_regex {
+            let mut pos = 0usize;
+            for mat in re.find_iter(text) {
+                let start = mat.start();
+                let end = mat.end();
+                // Skip zero-length matches to avoid infinite loops
+                if start == end {
+                    continue;
+                }
+                if start > pos {
+                    job.sections.push(LayoutSection {
+                        leading_space: 0.0,
+                        byte_range: pos..start,
+                        format: normal_fmt.clone(),
+                    });
+                }
+                job.sections.push(LayoutSection {
+                    leading_space: 0.0,
+                    byte_range: start..end,
+                    format: highlight_fmt.clone(),
+                });
+                pos = end;
+            }
+            if pos < text.len() {
+                job.sections.push(LayoutSection {
+                    leading_space: 0.0,
+                    byte_range: pos..text.len(),
+                    format: normal_fmt.clone(),
+                });
+            }
+            // If no sections were added (no matches), show entire text normally
+            if job.sections.is_empty() {
+                job.sections.push(LayoutSection {
+                    leading_space: 0.0,
+                    byte_range: 0..text.len(),
+                    format: normal_fmt,
+                });
+            }
+            return job;
+        }
+
+        // ── Literal substring highlighting ──────────────────────────
         if case_sensitive {
             // Case-sensitive: byte positions in the original text are
             // used directly -- no mapping needed.
