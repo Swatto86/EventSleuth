@@ -33,7 +33,10 @@ pub const EVT_RENDER_BUFFER_SIZE: usize = 8_192;
 pub const CHANNEL_BOUND: usize = 256;
 
 /// Row height in the virtual-scrolled event table (in logical pixels).
-pub const TABLE_ROW_HEIGHT: f32 = 22.0;
+/// NOTE: The canonical value is now in `ui::theme::TABLE_ROW_HEIGHT`.
+/// This constant is retained for backward compatibility only.
+#[allow(dead_code)]
+pub const TABLE_ROW_HEIGHT: f32 = 24.0;
 
 /// How many events to accumulate in a batch before sending to the UI.
 /// Smaller batches = more responsive UI updates; larger = less overhead.
