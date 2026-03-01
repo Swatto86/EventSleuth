@@ -2,6 +2,7 @@
 //!
 //! Generates the application icon programmatically and embeds it along with
 //! the Windows application manifest into the final executable.
+#![allow(clippy::too_many_arguments)]
 
 use std::path::Path;
 
@@ -290,8 +291,8 @@ fn draw_ring(
             let dy = py as f64 - cy;
             let dist = (dx * dx + dy * dy).sqrt();
             if dist >= inner && dist <= outer {
-                let edge_out = (outer - dist).min(1.0).max(0.0);
-                let edge_in = (dist - inner).min(1.0).max(0.0);
+                let edge_out = (outer - dist).clamp(0.0, 1.0);
+                let edge_in = (dist - inner).clamp(0.0, 1.0);
                 let alpha = (edge_out.min(edge_in) * ca as f64) as u8;
                 set_pixel(pixels, stride, px, py, cr, cg, cb, alpha);
             }

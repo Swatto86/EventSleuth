@@ -60,7 +60,7 @@ impl EventSleuthApp {
         self.reader_rx = Some(rx);
         self.cancel_flag = Some(cancel);
         self.is_loading = true;
-        self.status_text = "Loading\u{2026}".into();
+        self.status_text = "Loading...".into();
     }
 
     /// Request cancellation of the current reader thread.

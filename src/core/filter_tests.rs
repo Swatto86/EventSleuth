@@ -1,4 +1,5 @@
 //! Tests for the in-memory filtering logic.
+#![allow(clippy::field_reassign_with_default)]
 
 use super::*;
 use chrono::Utc;

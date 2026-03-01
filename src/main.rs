@@ -13,6 +13,8 @@ mod app_update;
 mod core;
 mod export;
 mod ui;
+
+use tracing_subscriber::Layer as _;
 mod util;
 
 use app::EventSleuthApp;
@@ -78,24 +80,26 @@ fn main() -> eframe::Result<()> {
         }
     };
 
-    // Initialise structured logging via tracing-subscriber.
-    // Logs go to stderr; set RUST_LOG=debug for verbose output.
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .with_target(false)
-        .init();
+    // ── Persistent file logging (Rule 10) ──────────────────────────────
+    // Set up dual-layer logging: stderr (env-controlled) + file (always debug).
+    // The file log lives at %LOCALAPPDATA%\EventSleuth\logs\eventsleuth.log.
+    let log_dir = init_log_dir();
+    init_logging(&log_dir);
 
     tracing::info!(
         "{} v{} starting",
         constants::APP_NAME,
         constants::APP_VERSION,
     );
+    if let Some(dir) = &log_dir {
+        tracing::info!("Log file: {}", dir.join(constants::LOG_FILE_NAME).display());
+    }
 
-    // Load the app icon for the titlebar
+    // ── Pre-init (Rule 16: avoid eframe white flash) ────────────────
+    // Perform all expensive initialisation BEFORE calling run_native()
+    // so the creator closure is trivial.
     let icon = load_app_icon();
+    let pre_init = app::PreInitState::build();
 
     // Configure the native window
     let mut viewport = egui::ViewportBuilder::default()
@@ -117,12 +121,80 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
-    // Launch the application
+    // Launch the application -- creator closure is trivial per Rule 16
     eframe::run_native(
         constants::APP_NAME,
         options,
-        Box::new(|cc| Ok(Box::new(EventSleuthApp::new(cc)))),
+        Box::new(move |cc| Ok(Box::new(EventSleuthApp::from_pre_init(cc, pre_init)))),
     )
+}
+
+/// Create the persistent log directory under `%LOCALAPPDATA%`.
+///
+/// Returns `Some(path)` to the log directory on success, `None` if the
+/// directory cannot be created (logging falls back to stderr only).
+fn init_log_dir() -> Option<std::path::PathBuf> {
+    let local_app_data = std::env::var("LOCALAPPDATA").ok()?;
+    let log_dir = std::path::PathBuf::from(local_app_data)
+        .join(constants::APP_DATA_DIR)
+        .join(constants::LOG_DIR);
+    std::fs::create_dir_all(&log_dir).ok()?;
+
+    // Rotate the log file if it exceeds the size limit.
+    let log_file = log_dir.join(constants::LOG_FILE_NAME);
+    if log_file.exists() {
+        if let Ok(meta) = std::fs::metadata(&log_file) {
+            if meta.len() > constants::MAX_LOG_FILE_SIZE {
+                let backup = log_dir.join("eventsleuth.log.old");
+                let _ = std::fs::rename(&log_file, &backup);
+            }
+        }
+    }
+
+    Some(log_dir)
+}
+
+/// Initialise the dual-layer tracing subscriber.
+///
+/// - **stderr layer**: filtered by `RUST_LOG` env var (default: `info`).
+/// - **file layer** (if `log_dir` is `Some`): always writes at `debug` level
+///   to a persistent log file for post-mortem diagnostics.
+fn init_logging(log_dir: &Option<std::path::PathBuf>) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+
+    let stderr_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_writer(std::io::stderr);
+
+    if let Some(dir) = log_dir {
+        let log_path = dir.join(constants::LOG_FILE_NAME);
+        if let Ok(file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            let file_layer = tracing_subscriber::fmt::layer()
+                .with_target(true)
+                .with_ansi(false)
+                .with_writer(std::sync::Mutex::new(file))
+                .with_filter(tracing_subscriber::EnvFilter::new("debug"));
+
+            tracing_subscriber::registry()
+                .with(stderr_layer.with_filter(env_filter))
+                .with(file_layer)
+                .init();
+            return;
+        }
+    }
+
+    // Fallback: stderr only
+    tracing_subscriber::registry()
+        .with(stderr_layer.with_filter(env_filter))
+        .init();
 }
 
 /// Load the application icon from the compile-time-embedded ICO data.

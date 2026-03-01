@@ -23,6 +23,27 @@ use crate::core::xml_parser::parse_event_xml;
 use crate::util::constants::*;
 use crate::util::error::EventSleuthError;
 
+/// HRESULT codes considered transient (worth retrying).
+///
+/// These correspond to conditions that may resolve on their own:
+/// busy handles, RPC timeouts, service restarts, file locks.
+const TRANSIENT_HRESULTS: &[u32] = &[
+    0x800706BA, // RPC server unavailable
+    0x800706BB, // RPC server too busy
+    0x800706BF, // RPC connection aborted
+    0x80070020, // ERROR_SHARING_VIOLATION (file lock)
+    0x8007045B, // ERROR_SHUTDOWN_IN_PROGRESS
+    0x00000005, // ERROR_ACCESS_DENIED (transient during service restart)
+    0x80070015, // ERROR_NOT_READY
+    1460,       // ERROR_TIMEOUT (raw Win32)
+    0x800705B4, // ERROR_TIMEOUT (HRESULT)
+];
+
+/// Check whether a Windows error code is considered transient.
+fn is_transient_error(code: u32) -> bool {
+    TRANSIENT_HRESULTS.contains(&code)
+}
+
 /// Messages sent from the background reader thread to the UI thread.
 #[derive(Debug)]
 pub enum ReaderMessage {
@@ -248,19 +269,22 @@ fn read_channel(
 
     tracing::debug!("Querying channel '{}' with XPath: {}", channel, xpath);
 
-    // SAFETY: We pass properly null-terminated UTF-16 strings. The session
-    // handle is None (local machine). Flags are provided by the caller.
-    let query_handle = unsafe {
-        EvtQuery(
-            None,
-            PCWSTR(channel_wide.as_ptr()),
-            PCWSTR(xpath_wide.as_ptr()),
-            query_flags,
-        )
-    }
-    .map_err(|e| EventSleuthError::WindowsApi {
-        hr: e.code().0 as u32,
-        context: format!("EvtQuery on channel '{channel}'"),
+    // Open the query with retry for transient failures (Rule 11).
+    let query_handle = retry_transient(|| {
+        // SAFETY: We pass properly null-terminated UTF-16 strings. The session
+        // handle is None (local machine). Flags are provided by the caller.
+        unsafe {
+            EvtQuery(
+                None,
+                PCWSTR(channel_wide.as_ptr()),
+                PCWSTR(xpath_wide.as_ptr()),
+                query_flags,
+            )
+        }
+        .map_err(|e| EventSleuthError::WindowsApi {
+            hr: e.code().0 as u32,
+            context: format!("EvtQuery on channel '{channel}'"),
+        })
     })?;
 
     let mut count = 0usize;
@@ -413,6 +437,47 @@ pub(super) fn extract_provider_name(xml: &str) -> Option<String> {
 /// Convert a `&str` to a null-terminated UTF-16 vector.
 pub(super) fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// Retry a fallible operation with capped exponential backoff for transient
+/// Windows API errors (Rule 11).
+///
+/// Attempts the operation up to [`MAX_RETRY_ATTEMPTS`] times. On each
+/// transient failure the thread sleeps for `RETRY_BASE_DELAY_MS * 2^attempt`
+/// milliseconds before retrying. Permanent errors are returned immediately.
+fn retry_transient<T, F>(mut op: F) -> Result<T, EventSleuthError>
+where
+    F: FnMut() -> Result<T, EventSleuthError>,
+{
+    let mut attempt = 0u32;
+    loop {
+        match op() {
+            Ok(val) => return Ok(val),
+            Err(e) => {
+                let transient = matches!(&e, EventSleuthError::WindowsApi { hr, .. } if is_transient_error(*hr));
+                attempt += 1;
+                if !transient || attempt >= MAX_RETRY_ATTEMPTS {
+                    if transient {
+                        tracing::warn!(
+                            "Transient error persisted after {} retries: {}",
+                            attempt,
+                            e
+                        );
+                    }
+                    return Err(e);
+                }
+                let delay_ms = RETRY_BASE_DELAY_MS * (1u64 << attempt);
+                tracing::debug!(
+                    "Transient error (attempt {}/{}), retrying in {}ms: {}",
+                    attempt,
+                    MAX_RETRY_ATTEMPTS,
+                    delay_ms,
+                    e
+                );
+                std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            }
+        }
+    }
 }
 
 #[cfg(test)]

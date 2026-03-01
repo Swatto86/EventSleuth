@@ -172,6 +172,26 @@ For optimal performance:
 - Close other resource-intensive applications
 - Ensure your system meets minimum requirements
 
+### Debug / Verbose Logging
+
+EventSleuth supports runtime-selectable debug logging via the `RUST_LOG` environment variable. Debug mode is disabled by default in release builds and incurs zero overhead in normal operation.
+
+**Activation:**
+
+```powershell
+# PowerShell — run with debug logging
+$env:RUST_LOG = "debug"; .\EventSleuth.exe
+
+# For maximum detail (trace level)
+$env:RUST_LOG = "trace"; .\EventSleuth.exe
+```
+
+**Log file location:** `%LOCALAPPDATA%\EventSleuth\logs\eventsleuth.log`
+
+The log file is always written at `debug` level regardless of the `RUST_LOG` setting. It rotates automatically when it exceeds 5 MB (the previous log is preserved as `eventsleuth.log.old`).
+
+**Output includes:** timestamps, module paths, function entry/exit, decision points, state transitions, OS-level interactions, and error chains. Secrets, tokens, and PII are never logged.
+
 ## Development
 
 ### Prerequisites
@@ -204,15 +224,23 @@ EventSleuth/
 │   ├── main.rs           # Application entry point, single-instance guard
 │   ├── app.rs            # App state, eframe::App impl, DWM startup cloaking
 │   ├── app_actions.rs    # Export, keyboard shortcuts, About dialog
+│   ├── lib.rs            # Library crate re-exports for integration tests
 │   ├── core/             # Event log API, parsing, filtering
 │   ├── ui/               # UI panel components and theme
 │   ├── export/           # CSV and JSON export
 │   └── util/             # Constants, error types, time helpers
+├── tests/                # Integration / E2E tests
+├── installer/
+│   └── eventsleuth.nsi   # NSIS installer script
 ├── assets/
 │   ├── app.manifest      # UAC and DPI manifest
 │   └── icon.ico          # Auto-generated application icon
+├── .github/workflows/
+│   ├── ci.yml            # CI: fmt, clippy, test, build on every push/PR
+│   └── release.yml       # Release: build + publish on version tag
 ├── build.rs              # Icon generation + Windows resource embedding
 ├── update-application.ps1 # Automated version bump, tag, and release
+├── PROJECT-ATLAS.md      # Architectural reference (Part B)
 ├── Cargo.toml            # Dependencies
 └── README.md
 ```

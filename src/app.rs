@@ -204,18 +204,22 @@ pub struct EventSleuthApp {
     pub column_visibility: ColumnVisibility,
 }
 
-// ── Construction ────────────────────────────────────────────────────────
+// ── Pre-initialisation state (built before eframe::run_native) ──────
 
-impl EventSleuthApp {
-    /// Create a new `EventSleuthApp` and apply the custom theme.
+/// Data collected before `eframe::run_native()` so that the creator
+/// closure is trivial (Rule 16: avoid white flash).
+pub struct PreInitState {
+    /// Discovered event log channels.
+    pub channels: Vec<String>,
+    /// Default channels to select on first launch.
+    pub selected: Vec<String>,
+}
+
+impl PreInitState {
+    /// Perform all expensive pre-launch work: channel enumeration, etc.
     ///
-    /// Enumerates available log channels (synchronous — typically fast)
-    /// and auto-starts loading the default channels.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        crate::ui::theme::apply_theme(&cc.egui_ctx);
-        Self::install_system_fonts(&cc.egui_ctx);
-
-        // Enumerate channels — this is fast (< 100ms typically)
+    /// Must be called **before** `eframe::run_native()`.
+    pub fn build() -> Self {
         let channels = match channel_enumerator::enumerate_channels() {
             Ok(ch) => ch,
             Err(e) => {
@@ -223,13 +227,27 @@ impl EventSleuthApp {
                 vec!["Application".into(), "System".into(), "Security".into()]
             }
         };
-
         let selected = channel_enumerator::common_channels(&channels);
+        Self { channels, selected }
+    }
+}
+
+// ── Construction ────────────────────────────────────────────────────────
+
+impl EventSleuthApp {
+    /// Create an `EventSleuthApp` from pre-initialised state.
+    ///
+    /// The `PreInitState` is built before `eframe::run_native()` so this
+    /// closure is trivial (font setup + struct construction only), which
+    /// eliminates the startup white flash on Windows.
+    pub fn from_pre_init(cc: &eframe::CreationContext<'_>, pre: PreInitState) -> Self {
+        crate::ui::theme::apply_theme(&cc.egui_ctx);
+        Self::install_system_fonts(&cc.egui_ctx);
 
         let mut app = Self {
-            channels,
+            channels: pre.channels,
             channel_search: String::new(),
-            selected_channels: selected,
+            selected_channels: pre.selected,
             show_channel_selector: false,
 
             all_events: Vec::new(),

@@ -67,6 +67,26 @@ pub const LIVE_TAIL_INTERVAL_SECS: u64 = 5;
 /// Maximum number of errors to retain in the error list.
 pub const MAX_ERRORS: usize = 200;
 
+/// Maximum number of retry attempts for transient Windows API errors.
+/// Used with exponential backoff (base delay * 2^attempt).
+pub const MAX_RETRY_ATTEMPTS: u32 = 3;
+
+/// Base delay in milliseconds for exponential backoff on transient errors.
+/// Sequence: 50ms -> 100ms -> 200ms.
+pub const RETRY_BASE_DELAY_MS: u64 = 50;
+
 /// HRESULT code for E_ACCESSDENIED from the Windows API.
 #[allow(dead_code)]
 pub const HRESULT_ACCESS_DENIED: u32 = 0x80070005;
+
+/// Application data subdirectory name for logs and configuration.
+pub const APP_DATA_DIR: &str = "EventSleuth";
+
+/// Log subdirectory name under the app data directory.
+pub const LOG_DIR: &str = "logs";
+
+/// Log file name for persistent error/debug logging.
+pub const LOG_FILE_NAME: &str = "eventsleuth.log";
+
+/// Maximum log file size in bytes before rotation (5 MB).
+pub const MAX_LOG_FILE_SIZE: u64 = 5 * 1024 * 1024;
