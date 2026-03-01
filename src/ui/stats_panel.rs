@@ -107,12 +107,18 @@ impl EventSleuthApp {
             .and_then(|t| t.with_second(0))
             .and_then(|t| t.with_nanosecond(0))
             .unwrap_or(min_ts);
-        let end_hour = max_ts
+        // Use checked arithmetic when advancing the end bucket by one hour to
+        // guard against a panic if max_ts is near DateTime<Utc>::MAX_UTC.
+        // In practice event timestamps are never near the maximum, but defensive
+        // code here avoids a panic on malformed or synthetic evtx files.
+        let max_ts_rounded = max_ts
             .with_minute(0)
             .and_then(|t| t.with_second(0))
             .and_then(|t| t.with_nanosecond(0))
-            .unwrap_or(max_ts)
-            + Duration::hours(1);
+            .unwrap_or(max_ts);
+        let end_hour = max_ts_rounded
+            .checked_add_signed(Duration::hours(1))
+            .unwrap_or(max_ts_rounded);
 
         let total_hours = ((end_hour - start_hour).num_hours()).max(1) as usize;
 
