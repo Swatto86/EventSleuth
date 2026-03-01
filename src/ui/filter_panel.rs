@@ -20,7 +20,7 @@ impl EventSleuthApp {
 
         // ── Active-filter summary banner ────────────────────────────
         // Shown only when at least one filter is active so users always
-        // know the table is narrowed, plus a one-click clear.
+        // know the table is narrowed.
         if !self.filter.is_empty() {
             egui::Frame::new()
                 .fill(theme::filter_active_bg(dark))
@@ -35,29 +35,35 @@ impl EventSleuthApp {
                             egui::Color32::WHITE,
                         );
                         ui.label(
-                            egui::RichText::new("active filters")
+                            egui::RichText::new("active filters narrowing results")
                                 .color(theme::accent(dark))
                                 .small()
                                 .strong(),
                         );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .small_button("\u{2716} Clear all")
-                                .on_hover_text("Reset every filter to its default")
-                                .clicked()
-                            {
-                                self.filter.clear();
-                                self.filter.parse_event_ids();
-                                self.filter.parse_time_range();
-                                self.needs_refilter = true;
-                            }
-                        });
                     });
                 });
             ui.add_space(theme::SECTION_SPACING);
         }
 
-        ui.heading(egui::RichText::new("\u{1F50D} Filters").color(theme::accent(dark)));
+        // ── Heading row with Clear All always visible ──────────────
+        ui.horizontal(|ui| {
+            ui.heading(egui::RichText::new("\u{1F50D} Filters").color(theme::accent(dark)));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if !self.filter.is_empty()
+                    && ui
+                        .small_button("\u{2716} Clear all")
+                        .on_hover_text("Reset every filter to its default (Ctrl+Shift+X)")
+                        .clicked()
+                    {
+                        self.filter.clear();
+                        self.filter.parse_event_ids();
+                        self.filter.parse_time_range();
+                        self.needs_refilter = true;
+                    }
+            });
+        });
+
+        ui.add_space(theme::ITEM_SPACING);
 
         // ── Preset controls (inline) ────────────────────────────────
         ui.horizontal(|ui| {
@@ -395,29 +401,25 @@ impl EventSleuthApp {
         ui.add_space(theme::SECTION_SPACING);
         ui.separator();
 
-        // ── Apply / Clear buttons ───────────────────────────────────
-        ui.horizontal(|ui| {
+        // ── Re-query button ─────────────────────────────────────────
+        ui.vertical_centered(|ui| {
+            let btn = egui::Button::new(
+                egui::RichText::new("\u{1F504} Re-query Sources")
+                    .color(egui::Color32::WHITE)
+                    .strong(),
+            )
+            .fill(theme::accent(dark))
+            .min_size(egui::vec2(ui.available_width().min(200.0), 28.0));
             if ui
-                .button(
-                    egui::RichText::new("\u{1F504} Re-query")
-                        .color(theme::accent(dark)),
-                )
+                .add(btn)
                 .on_hover_text(
-                    "Re-read events from the selected sources with the\ncurrent time-range filter applied at the query level (F5)",
+                    "Re-read events from the selected sources with the\ncurrent time-range filter applied at query level (F5)",
                 )
                 .clicked()
             {
                 self.filter.parse_event_ids();
                 self.filter.parse_time_range();
                 self.start_loading();
-            }
-            if ui
-                .button("\u{1F5D1}\u{FE0F} Clear")
-                .on_hover_text("Reset all filters to their defaults")
-                .clicked()
-            {
-                self.filter.clear();
-                changed = true;
             }
         });
 
