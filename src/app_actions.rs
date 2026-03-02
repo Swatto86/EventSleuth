@@ -361,42 +361,6 @@ impl EventSleuthApp {
 
 // ── Live tail ───────────────────────────────────────────────────────────
 
-#[cfg(test)]
-mod tail_datetime_tests {
-    /// Regression test for B2: adding 1 ms to DateTime<Utc>::MAX must return
-    /// None (overflow) so the tail poll is skipped rather than re-delivering
-    /// the last event on every tick.
-    ///
-    /// The old code used `.unwrap_or(t)` which fell back to the un-incremented
-    /// timestamp; start_tail_query would then re-query from the exact same
-    /// timestamp each tick, causing the last event to be re-delivered on every
-    /// live-tail cycle (Bug fix: infinite re-delivery on DateTime::MAX overflow).
-    #[test]
-    fn tail_from_near_max_datetime_overflow_returns_none() {
-        use chrono::Duration;
-        // Use the maximum representable chrono::DateTime<chrono::Utc> value.
-        let max_dt = chrono::DateTime::<chrono::Utc>::MAX_UTC;
-        // The new logic uses and_then which propagates None on overflow.
-        let tail_from = max_dt.checked_add_signed(Duration::milliseconds(1));
-        // On overflow checked_add_signed returns None, NOT the original timestamp.
-        assert!(
-            tail_from.is_none(),
-            "adding 1 ms to DateTime::MAX must return None (overflow), not wrap"
-        );
-    }
-
-    /// Normal case: adding 1 ms to a typical timestamp must increment it by exactly 1 ms.
-    #[test]
-    fn tail_from_normal_datetime_increments_by_1ms() {
-        use chrono::{Duration, TimeZone, Utc};
-        let ts = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
-        let result = ts
-            .checked_add_signed(Duration::milliseconds(1))
-            .unwrap_or(ts);
-        assert_eq!(result - ts, Duration::milliseconds(1));
-    }
-}
-
 impl EventSleuthApp {
     /// Start a tail query that appends new events (does NOT clear existing data).
     ///
@@ -529,5 +493,41 @@ impl EventSleuthApp {
             self.preset_name_input.clear();
             self.save_preset_focus_requested = false;
         }
+    }
+}
+
+#[cfg(test)]
+mod tail_datetime_tests {
+    /// Regression test for B2: adding 1 ms to DateTime<Utc>::MAX must return
+    /// None (overflow) so the tail poll is skipped rather than re-delivering
+    /// the last event on every tick.
+    ///
+    /// The old code used `.unwrap_or(t)` which fell back to the un-incremented
+    /// timestamp; start_tail_query would then re-query from the exact same
+    /// timestamp each tick, causing the last event to be re-delivered on every
+    /// live-tail cycle (Bug fix: infinite re-delivery on DateTime::MAX overflow).
+    #[test]
+    fn tail_from_near_max_datetime_overflow_returns_none() {
+        use chrono::Duration;
+        // Use the maximum representable chrono::DateTime<chrono::Utc> value.
+        let max_dt = chrono::DateTime::<chrono::Utc>::MAX_UTC;
+        // The new logic uses and_then which propagates None on overflow.
+        let tail_from = max_dt.checked_add_signed(Duration::milliseconds(1));
+        // On overflow checked_add_signed returns None, NOT the original timestamp.
+        assert!(
+            tail_from.is_none(),
+            "adding 1 ms to DateTime::MAX must return None (overflow), not wrap"
+        );
+    }
+
+    /// Normal case: adding 1 ms to a typical timestamp must increment it by exactly 1 ms.
+    #[test]
+    fn tail_from_normal_datetime_increments_by_1ms() {
+        use chrono::{Duration, TimeZone, Utc};
+        let ts = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
+        let result = ts
+            .checked_add_signed(Duration::milliseconds(1))
+            .unwrap_or(ts);
+        assert_eq!(result - ts, Duration::milliseconds(1));
     }
 }
