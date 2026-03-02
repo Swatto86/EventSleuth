@@ -374,73 +374,6 @@ pub(crate) fn security_access_error_in_list(errors: &[(String, String)]) -> bool
     })
 }
 
-#[cfg(test)]
-mod security_banner_tests {
-    use super::security_access_error_in_list;
-
-    fn e(ch: &str, msg: &str) -> (String, String) {
-        (ch.to_owned(), msg.to_owned())
-    }
-
-    /// Regression test for Bug 1: HRESULT 0x80070005 must trigger the banner.
-    #[test]
-    fn hresult_access_denied_triggers_banner() {
-        let errors = vec![e(
-            "Security",
-            "Windows API error: EvtQuery on channel 'Security' (HRESULT: 0x80070005)",
-        )];
-        assert!(
-            security_access_error_in_list(&errors),
-            "HRESULT 0x80070005 in Security channel error must trigger security banner"
-        );
-    }
-
-    /// Regression test for Bug 1: the previously dead-code check `"00000005"`
-    /// (raw Win32 code) must NOT independently trigger the banner.
-    #[test]
-    fn raw_win32_code_string_alone_does_not_trigger_banner() {
-        // A message containing only the "00000005" raw code string (no HRESULT
-        // prefix, no "access" substring) must NOT trigger the banner.
-        let errors = vec![e("Security", "error code: 00000005")];
-        assert!(
-            !security_access_error_in_list(&errors),
-            "Raw Win32 code string '00000005' alone must NOT trigger the security banner"
-        );
-    }
-
-    /// Non-Security channels must never trigger the banner, even on access errors.
-    #[test]
-    fn non_security_channel_never_triggers_banner() {
-        let errors = vec![e(
-            "Application",
-            "Windows API error: EvtQuery (HRESULT: 0x80070005)",
-        )];
-        assert!(
-            !security_access_error_in_list(&errors),
-            "Access-denied on a non-Security channel must not trigger the security banner"
-        );
-    }
-
-    /// Generic "access denied" text in a Security-channel error triggers the banner.
-    #[test]
-    fn generic_access_text_triggers_banner() {
-        let errors = vec![e("Security", "Access denied: channel cannot be opened")];
-        assert!(
-            security_access_error_in_list(&errors),
-            "Access-denied text in Security channel error must trigger the security banner"
-        );
-    }
-
-    /// Empty error list must not trigger the banner.
-    #[test]
-    fn empty_errors_no_banner() {
-        assert!(
-            !security_access_error_in_list(&[]),
-            "Empty error list must not trigger the security banner"
-        );
-    }
-}
-
 // ── eframe::App implementation ──────────────────────────────────────────
 
 impl eframe::App for EventSleuthApp {
@@ -591,5 +524,72 @@ impl eframe::App for EventSleuthApp {
             &self.max_events_per_channel,
         );
         eframe::set_value(storage, "column_visibility", &self.column_visibility);
+    }
+}
+
+#[cfg(test)]
+mod security_banner_tests {
+    use super::security_access_error_in_list;
+
+    fn e(ch: &str, msg: &str) -> (String, String) {
+        (ch.to_owned(), msg.to_owned())
+    }
+
+    /// Regression test for Bug 1: HRESULT 0x80070005 must trigger the banner.
+    #[test]
+    fn hresult_access_denied_triggers_banner() {
+        let errors = vec![e(
+            "Security",
+            "Windows API error: EvtQuery on channel 'Security' (HRESULT: 0x80070005)",
+        )];
+        assert!(
+            security_access_error_in_list(&errors),
+            "HRESULT 0x80070005 in Security channel error must trigger security banner"
+        );
+    }
+
+    /// Regression test for Bug 1: the previously dead-code check `"00000005"`
+    /// (raw Win32 code) must NOT independently trigger the banner.
+    #[test]
+    fn raw_win32_code_string_alone_does_not_trigger_banner() {
+        // A message containing only the "00000005" raw code string (no HRESULT
+        // prefix, no "access" substring) must NOT trigger the banner.
+        let errors = vec![e("Security", "error code: 00000005")];
+        assert!(
+            !security_access_error_in_list(&errors),
+            "Raw Win32 code string '00000005' alone must NOT trigger the security banner"
+        );
+    }
+
+    /// Non-Security channels must never trigger the banner, even on access errors.
+    #[test]
+    fn non_security_channel_never_triggers_banner() {
+        let errors = vec![e(
+            "Application",
+            "Windows API error: EvtQuery (HRESULT: 0x80070005)",
+        )];
+        assert!(
+            !security_access_error_in_list(&errors),
+            "Access-denied on a non-Security channel must not trigger the security banner"
+        );
+    }
+
+    /// Generic "access denied" text in a Security-channel error triggers the banner.
+    #[test]
+    fn generic_access_text_triggers_banner() {
+        let errors = vec![e("Security", "Access denied: channel cannot be opened")];
+        assert!(
+            security_access_error_in_list(&errors),
+            "Access-denied text in Security channel error must trigger the security banner"
+        );
+    }
+
+    /// Empty error list must not trigger the banner.
+    #[test]
+    fn empty_errors_no_banner() {
+        assert!(
+            !security_access_error_in_list(&[]),
+            "Empty error list must not trigger the security banner"
+        );
     }
 }
