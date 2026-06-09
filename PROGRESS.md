@@ -1,12 +1,12 @@
 # EventSleuth — Progress Tracker
 
-> Last updated: 2026-03-01
+> Last updated: 2026-06-09
 
 ## Build Status
 
 - **Debug build:** ✅ Compiles — zero errors, zero warnings
 - **Release build:** ✅ Compiles — optimised, LTO, stripped symbols
-- **Unit tests:** ✅ 147/147 passing
+- **Unit tests:** ✅ All passing (81 test functions across unit + integration suites)
 - **App launches:** ✅ GUI window opens, events load from Application/System sources
 - **CI/CD:** ✅ GitHub Actions workflow for automated release builds
 - **Single instance:** ✅ Named mutex prevents duplicate instances
@@ -191,6 +191,7 @@ EventSleuth/
 | **Bug audit – max-events feedback** | Filter panel now shows a warning label when the typed max-events value is outside the valid range (1,000–10,000,000), so the effective clamped value is always visible. |
 | **Bug audit – live-tail resource cap** | Added `MAX_TOTAL_EVENTS_CAP` (4x `MAX_EVENTS_PER_CHANNEL`) constant; live-tail queries evict the oldest events when the cap is exceeded, preventing unbounded memory growth on long-running sessions (Rule 11). |
 | **Bug audit – full codebase audit 2026-03-01** | Five bugs found and fixed across logic, runtime, and UX categories: (1) Reader-thread panic leaves infinite loading spinner — `process_messages` now distinguishes `TryRecvError::Disconnected` from `::Empty` and clears loading state on unexpected disconnection. (2) Zero-length `LayoutSection` in Unicode case-insensitive search highlight — the `to_lowercase()` char-expansion path in `build_highlighted_job` skips sections whose computed byte range is empty. (3) ICO bounds check integer-overflow — `data_offset + data_size` now uses `checked_add` (`?`) to avoid wrapping on malformed ICO data. (4) Live-tail overflow re-delivered last event every tick — the `unwrap_or(t)` fallback on `DateTime::MAX` overflow replaced by logging a warning and skipping the poll (returning `None`) so no duplicate events are delivered. (5) `apply_filter` selection-restoration clamping never fired — the post-restoration `if let Some(idx)` guard could never be true after `position()` sets to a valid index; refactored to clamp to last row when the selected event is filtered out (the originally documented intent). |
+| **Bug audit – full codebase audit 2026-06-09** | Five issues found and fixed: (1) `status_text` was written throughout the app ("Loaded N events", "No sources selected", "Loading <file>...", reader-crash diagnostics) but never rendered anywhere — the status bar now displays it in place of the static "Ready" label. (2) Cancelling a load left the (now-visible) status stuck on "Loading..." — `cancel_loading` sets "Cancelled" when a load was actually in flight. (3) Live-tail eviction cap did not scale with the user-configurable max-events setting — a per-channel max above 2.5M (UI allows up to 10M) meant the first tail poll silently evicted freshly loaded events and cleared bookmarks; the effective cap is now `max(MAX_TOTAL_EVENTS_CAP, max_events_per_channel * 4)` via the tested `effective_tail_cap` helper. (4) `is_tail_query` was not reset when the reader thread died unexpectedly, leaving stale tail state. (5) Escape-key dialog close did not clear transient dialog state (`channel_search`, `preset_name_input`), unlike the dialogs' own Cancel/close buttons. Also corrected the README keyboard-shortcut table, which documented Ctrl+F / Ctrl+E bindings that do not exist and omitted the real ones. |
 
 ---
 

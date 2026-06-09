@@ -58,6 +58,12 @@ impl EventSleuthApp {
                     egui::RichText::new(format!("Live tail (last: {since})"))
                         .color(theme::accent(dark)),
                 );
+            } else if !self.status_text.is_empty() {
+                // Status messages set by the app ("Loaded N events",
+                // "No sources selected", reader-crash diagnostics, ...).
+                ui.label(
+                    egui::RichText::new(self.status_text.as_str()).color(theme::accent_dim(dark)),
+                );
             } else {
                 ui.label(egui::RichText::new("Ready").color(theme::accent_dim(dark)));
             }

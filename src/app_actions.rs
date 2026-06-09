@@ -158,7 +158,9 @@ impl EventSleuthApp {
                 self.needs_refilter = true;
             }
 
-            // Escape = Cancel loading, close dialogs, then clear selection
+            // Escape = Cancel loading, close dialogs, then clear selection.
+            // Closing a dialog resets its transient input state so the
+            // behaviour matches the dialog's own Cancel / close button.
             if i.key_pressed(egui::Key::Escape) {
                 if self.is_loading {
                     self.cancel_loading();
@@ -166,8 +168,11 @@ impl EventSleuthApp {
                     self.show_about = false;
                 } else if self.show_channel_selector {
                     self.show_channel_selector = false;
+                    self.channel_search.clear();
                 } else if self.show_save_preset {
                     self.show_save_preset = false;
+                    self.preset_name_input.clear();
+                    self.save_preset_focus_requested = false;
                 } else if self.show_stats {
                     self.show_stats = false;
                 } else {

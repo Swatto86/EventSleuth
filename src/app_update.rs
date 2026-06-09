@@ -82,6 +82,12 @@ impl EventSleuthApp {
         if let Some(flag) = &self.cancel_flag {
             flag.store(true, Ordering::Relaxed);
         }
+        if self.is_loading {
+            // Replace the stale "Loading..." status. Callers that start a
+            // new load immediately afterwards overwrite this with their own
+            // status text.
+            self.status_text = "Cancelled".into();
+        }
         self.is_loading = false;
         self.reader_rx = None;
         self.cancel_flag = None;
@@ -130,10 +136,14 @@ impl EventSleuthApp {
                         //  • `bookmarked_indices` are cleared because they are raw indices
                         //    into `all_events` whose values shift after the drain.  We
                         //    cannot remap them cheaply without a reverse lookup map.
-                        if self.is_tail_query
-                            && self.all_events.len() > constants::MAX_TOTAL_EVENTS_CAP
-                        {
-                            let evict = self.all_events.len() - constants::MAX_TOTAL_EVENTS_CAP;
+                        //
+                        // The cap scales with the user-configured per-channel maximum
+                        // (which can exceed the compile-time default by up to 20x) so a
+                        // deliberately large full load is never silently evicted by the
+                        // first tail poll.
+                        let cap = effective_tail_cap(self.max_events_per_channel);
+                        if self.is_tail_query && self.all_events.len() > cap {
+                            let evict = self.all_events.len() - cap;
                             self.all_events.drain(0..evict);
                             self.filtered_indices.clear();
                             self.selected_event_idx = None;
@@ -144,13 +154,13 @@ impl EventSleuthApp {
                                     "Cleared bookmarks after evicting {} oldest events \
                                  (live-tail cap {} reached)",
                                     evict,
-                                    constants::MAX_TOTAL_EVENTS_CAP,
+                                    cap,
                                 );
                             }
                             tracing::debug!(
                                 "Evicted {} oldest events to stay within live-tail cap of {}",
                                 evict,
-                                constants::MAX_TOTAL_EVENTS_CAP,
+                                cap,
                             );
                         }
 
@@ -203,6 +213,7 @@ impl EventSleuthApp {
             self.is_loading = false;
             self.reader_rx = None;
             self.cancel_flag = None;
+            self.is_tail_query = false;
             self.stats_dirty = true;
             let msg = "Reader thread terminated unexpectedly (check log for details)".to_string();
             tracing::error!("{}", msg);
@@ -356,6 +367,20 @@ impl EventSleuthApp {
         self.import_rx = None;
         self.start_loading_evtx(&path);
     }
+}
+
+// ── Live-tail cap helper (pure, testable) ───────────────────────────────
+
+/// Effective upper bound on `all_events` during live-tail appends.
+///
+/// Uses the compile-time [`constants::MAX_TOTAL_EVENTS_CAP`] as a floor but
+/// scales with the user-configured per-channel maximum (4x, mirroring the
+/// constant's own multiplier).  Without the scaling, a user who raised the
+/// per-channel max above `MAX_TOTAL_EVENTS_CAP / 4` would have a freshly
+/// loaded data set silently evicted (and bookmarks cleared) by the very
+/// first live-tail poll.
+pub(crate) fn effective_tail_cap(max_events_per_channel: usize) -> usize {
+    constants::MAX_TOTAL_EVENTS_CAP.max(max_events_per_channel.saturating_mul(4))
 }
 
 // ── Security banner helper (pure, testable) ─────────────────────────────
@@ -524,6 +549,49 @@ impl eframe::App for EventSleuthApp {
             &self.max_events_per_channel,
         );
         eframe::set_value(storage, "column_visibility", &self.column_visibility);
+    }
+}
+
+#[cfg(test)]
+mod tail_cap_tests {
+    use super::effective_tail_cap;
+    use crate::util::constants;
+
+    /// With the default per-channel max, the cap equals the compile-time
+    /// constant (4x the default per-channel max).
+    #[test]
+    fn default_setting_uses_compile_time_cap() {
+        assert_eq!(
+            effective_tail_cap(constants::MAX_EVENTS_PER_CHANNEL),
+            constants::MAX_TOTAL_EVENTS_CAP,
+        );
+    }
+
+    /// A small user-configured max must never lower the cap below the
+    /// compile-time floor.
+    #[test]
+    fn small_setting_never_lowers_cap_below_floor() {
+        assert_eq!(effective_tail_cap(1_000), constants::MAX_TOTAL_EVENTS_CAP);
+    }
+
+    /// Regression test: a per-channel max above `MAX_TOTAL_EVENTS_CAP / 4`
+    /// must scale the cap so a full load at the user's chosen size is not
+    /// evicted by the first tail poll.
+    #[test]
+    fn large_setting_scales_cap() {
+        let user_max = 10_000_000; // UI maximum
+        let cap = effective_tail_cap(user_max);
+        assert_eq!(cap, user_max * 4);
+        assert!(
+            cap >= user_max,
+            "a single full channel load must fit within the tail cap"
+        );
+    }
+
+    /// Saturating arithmetic: an absurd value must not overflow.
+    #[test]
+    fn cap_saturates_instead_of_overflowing() {
+        assert_eq!(effective_tail_cap(usize::MAX), usize::MAX);
     }
 }
 

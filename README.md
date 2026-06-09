@@ -133,11 +133,12 @@ Events are fetched in the background and streamed to the UI, allowing for respon
 
 | Shortcut | Action |
 |----------|--------|
-| Ctrl+F | Focus search filter |
-| Ctrl+E | Toggle export dialog |
-| Ctrl+R | Refresh current log |
-| F5 | Refresh current log |
-| Escape | Clear filters |
+| F5 / Ctrl+R | Refresh (re-query selected sources) |
+| Escape | Cancel loading / close dialog / clear selection |
+| ↑ / ↓ | Navigate event table |
+| Page Up / Page Down | Jump 20 events |
+| Home / End | Jump to first / last event |
+| Ctrl+Shift+X | Clear all filters |
 
 ## Comparison to Event Viewer
 
