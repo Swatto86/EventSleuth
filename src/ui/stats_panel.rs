@@ -67,7 +67,7 @@ impl EventSleuthApp {
             .into_iter()
             .map(|(k, v)| (k.to_owned(), v))
             .collect();
-        provider_vec.sort_by(|a, b| b.1.cmp(&a.1));
+        provider_vec.sort_by_key(|&(_, count)| std::cmp::Reverse(count));
         provider_vec.truncate(MAX_TOP_PROVIDERS);
 
         // Hourly histogram
