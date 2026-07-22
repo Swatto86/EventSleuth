@@ -1,6 +1,6 @@
 [package]
 name = "eventsleuth"
-version = "1.0.7"
+version = "1.0.8"
 edition = "2021"
 description = "A fast, filterable Windows Event Log viewer"
 authors = ["EventSleuth"]
