@@ -197,10 +197,7 @@ impl EventSleuthApp {
 
             // Ctrl+Shift+X = Clear all filters
             if i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::X) {
-                self.filter.clear();
-                self.filter.parse_event_ids();
-                self.filter.parse_time_range();
-                self.needs_refilter = true;
+                self.clear_all_filters();
             }
 
             // Escape = Cancel loading, close dialogs, then clear selection.

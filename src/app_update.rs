@@ -332,6 +332,13 @@ impl EventSleuthApp {
         });
     }
 
+    /// Reset every user-visible narrowing: the filter state *and* the
+    /// app-level "bookmarks only" toggle, which is not part of `FilterState`.
+    pub fn clear_all_filters(&mut self) {
+        reset_all_narrowing(&mut self.filter, &mut self.show_bookmarks_only);
+        self.needs_refilter = true;
+    }
+
     /// Toggle the bookmark on the event at `event_idx` (an index into
     /// `all_events`).
     ///
@@ -427,6 +434,23 @@ pub(crate) fn tail_evict_count(
     channel_count: usize,
 ) -> usize {
     len.saturating_sub(effective_tail_cap(max_events_per_channel, channel_count))
+}
+
+// ── Clear-all helper (pure, testable) ───────────────────────────────────
+
+/// Reset everything that narrows the visible rows.
+///
+/// "Bookmarks only" lives on the app, not on [`FilterState`], so clearing the
+/// filter alone leaves the table narrowed with no filter to explain it —
+/// which made the "Clear all filters" button appear to do nothing.
+pub(crate) fn reset_all_narrowing(
+    filter: &mut crate::core::filter::FilterState,
+    show_bookmarks_only: &mut bool,
+) {
+    filter.clear();
+    filter.parse_event_ids();
+    filter.parse_time_range();
+    *show_bookmarks_only = false;
 }
 
 // ── Bookmark-toggle helper (pure, testable) ─────────────────────────────
@@ -913,5 +937,37 @@ mod bookmark_toggle_tests {
     fn toggle_without_bookmarks_only_needs_no_refilter() {
         let mut b: HashSet<usize> = HashSet::new();
         assert!(!apply_bookmark_toggle(&mut b, 3, false));
+    }
+}
+
+#[cfg(test)]
+mod clear_all_tests {
+    use super::reset_all_narrowing;
+    use crate::core::filter::FilterState;
+
+    /// Regression test: "Clear all filters" must also switch off
+    /// "Bookmarks only", otherwise a user who ticked it with nothing pinned is
+    /// left with an empty table and a button that appears to do nothing.
+    #[test]
+    fn clearing_also_turns_off_bookmarks_only() {
+        let mut filter = FilterState::default();
+        let mut bookmarks_only = true;
+        reset_all_narrowing(&mut filter, &mut bookmarks_only);
+        assert!(!bookmarks_only, "bookmarks-only mode must be switched off");
+    }
+
+    /// The filter state itself is still reset.
+    #[test]
+    fn clearing_resets_the_filter_state() {
+        let mut filter = FilterState::default();
+        filter.text_search = "boom".into();
+        filter.event_id_input = "4624".into();
+        filter.levels[5] = false;
+        let mut bookmarks_only = false;
+        reset_all_narrowing(&mut filter, &mut bookmarks_only);
+        assert!(
+            filter.is_empty(),
+            "every filter must be back to its default"
+        );
     }
 }

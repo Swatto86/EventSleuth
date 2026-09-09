@@ -49,16 +49,13 @@ impl EventSleuthApp {
         ui.horizontal(|ui| {
             ui.heading(egui::RichText::new("\u{1F50D} Filters").color(theme::accent(dark)));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if !self.filter.is_empty()
+                if (!self.filter.is_empty() || self.show_bookmarks_only)
                     && ui
                         .small_button("\u{2716} Clear all")
                         .on_hover_text("Reset every filter to its default (Ctrl+Shift+X)")
                         .clicked()
                 {
-                    self.filter.clear();
-                    self.filter.parse_event_ids();
-                    self.filter.parse_time_range();
-                    self.needs_refilter = true;
+                    self.clear_all_filters();
                 }
             });
         });

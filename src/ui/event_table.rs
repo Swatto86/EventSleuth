@@ -77,11 +77,20 @@ impl EventSleuthApp {
                     );
                     ui.add_space(4.0);
                     ui.label(
-                        egui::RichText::new(format!(
-                            "{} events loaded but hidden by {} active filter(s).",
-                            self.all_events.len(),
-                            self.filter.active_count()
-                        ))
+                        egui::RichText::new(if self.show_bookmarks_only {
+                            format!(
+                                "{} events loaded; \"Bookmarks only\" is on ({} bookmarked) and {} filter(s) active.",
+                                self.all_events.len(),
+                                self.bookmarked_indices.len(),
+                                self.filter.active_count()
+                            )
+                        } else {
+                            format!(
+                                "{} events loaded but hidden by {} active filter(s).",
+                                self.all_events.len(),
+                                self.filter.active_count()
+                            )
+                        })
                         .color(theme::text_dim(self.dark_mode)),
                     );
                     ui.add_space(8.0);
@@ -90,10 +99,7 @@ impl EventSleuthApp {
                         .on_hover_text("Remove all active filters (Ctrl+Shift+X)")
                         .clicked()
                     {
-                        self.filter.clear();
-                        self.filter.parse_event_ids();
-                        self.filter.parse_time_range();
-                        self.needs_refilter = true;
+                        self.clear_all_filters();
                     }
                 }
             });
