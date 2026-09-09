@@ -44,6 +44,7 @@ impl EventSleuthApp {
 
         // Bookmarks reference indices into all_events, so they become
         // invalid after a reload and must be cleared.
+        self.bookmark_notice = bookmark_clear_notice(self.bookmarked_indices.len());
         self.bookmarked_indices.clear();
         self.show_bookmarks_only = false;
 
@@ -148,6 +149,8 @@ impl EventSleuthApp {
                             self.filtered_indices.clear();
                             self.selected_event_idx = None;
                             if !self.bookmarked_indices.is_empty() {
+                                self.bookmark_notice =
+                                    bookmark_clear_notice(self.bookmarked_indices.len());
                                 self.bookmarked_indices.clear();
                                 self.show_bookmarks_only = false;
                                 tracing::debug!(
@@ -381,6 +384,24 @@ impl EventSleuthApp {
 /// first live-tail poll.
 pub(crate) fn effective_tail_cap(max_events_per_channel: usize) -> usize {
     constants::MAX_TOTAL_EVENTS_CAP.max(max_events_per_channel.saturating_mul(4))
+}
+
+// ── Bookmark-notice helper (pure, testable) ─────────────────────────────
+
+/// Build the transient status-bar notice for a reload that is about to discard
+/// `bookmark_count` bookmarks.
+///
+/// Reloading (refresh, `.evtx` import, live-tail eviction) invalidates the raw
+/// indices in `bookmarked_indices`, so they have to be dropped — but the user
+/// must be told, otherwise pinned events vanish with no feedback at all.
+/// Returns `None` when nothing would be lost, so a reload with no bookmarks
+/// shows no notice.
+pub(crate) fn bookmark_clear_notice(bookmark_count: usize) -> Option<(usize, std::time::Instant)> {
+    if bookmark_count == 0 {
+        None
+    } else {
+        Some((bookmark_count, std::time::Instant::now()))
+    }
 }
 
 // ── Security banner helper (pure, testable) ─────────────────────────────
@@ -659,5 +680,23 @@ mod security_banner_tests {
             !security_access_error_in_list(&[]),
             "Empty error list must not trigger the security banner"
         );
+    }
+}
+
+#[cfg(test)]
+mod bookmark_notice_tests {
+    use super::bookmark_clear_notice;
+
+    /// A reload that discards pinned events must produce a notice carrying the
+    /// number lost, so the status bar can tell the user.
+    #[test]
+    fn notice_records_discarded_bookmark_count() {
+        assert_eq!(bookmark_clear_notice(3).map(|(n, _)| n), Some(3));
+    }
+
+    /// A reload with nothing pinned must not show a notice.
+    #[test]
+    fn no_notice_when_nothing_was_pinned() {
+        assert!(bookmark_clear_notice(0).is_none());
     }
 }

@@ -68,6 +68,20 @@ impl EventSleuthApp {
                 ui.label(egui::RichText::new("Ready").color(theme::accent_dim(dark)));
             }
 
+            // ── Bookmarks-discarded notice ──────────────────────────
+            if let Some((n, when)) = self.bookmark_notice {
+                if when.elapsed() < std::time::Duration::from_secs(10) {
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "\u{2B50} {} bookmark(s) cleared by reload",
+                            n
+                        ))
+                        .color(theme::level_color(3, dark)),
+                    );
+                }
+            }
+
             // ── Errors indicator (right-aligned, with badge) ────────
             if !self.errors.is_empty() {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

@@ -204,6 +204,9 @@ pub struct EventSleuthApp {
     pub bookmarked_indices: std::collections::HashSet<usize>,
     /// Whether to show only bookmarked events in the table.
     pub show_bookmarks_only: bool,
+    /// Transient notice recording that a reload discarded N bookmarks:
+    /// `(count, when)`. Displayed briefly in the status bar.
+    pub bookmark_notice: Option<(usize, std::time::Instant)>,
 
     // ── Save-preset dialog focus tracking ───────────────────────
     /// `true` once the save-preset text field has received its initial
@@ -315,6 +318,7 @@ impl EventSleuthApp {
 
             bookmarked_indices: std::collections::HashSet::new(),
             show_bookmarks_only: false,
+            bookmark_notice: None,
 
             save_preset_focus_requested: false,
 

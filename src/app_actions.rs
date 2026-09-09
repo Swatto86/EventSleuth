@@ -328,6 +328,8 @@ impl EventSleuthApp {
 
         // Bookmarks reference indices into all_events, so they become
         // invalid after a file import and must be cleared.
+        self.bookmark_notice =
+            crate::app_update::bookmark_clear_notice(self.bookmarked_indices.len());
         self.bookmarked_indices.clear();
         self.show_bookmarks_only = false;
 
