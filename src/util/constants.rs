@@ -17,9 +17,9 @@ pub const EVT_NEXT_TIMEOUT_MS: u32 = 1000;
 /// with millions of entries. Users can increase this via future settings.
 pub const MAX_EVENTS_PER_CHANNEL: usize = 500_000;
 
-/// Default channels selected on first launch.
-#[allow(dead_code)]
-pub const DEFAULT_CHANNELS: &[&str] = &["Application", "System"];
+// NOTE: The channels selected on first launch are NOT defined here.  They come
+// from `core::channel_enumerator::common_channels`, which matches the names
+// against the list the OS actually reports so casing is preserved.
 
 /// Buffer size (in `u16` units) for `EvtRender` output.
 /// 8 KB (16 KB raw) is enough for the vast majority of events; the buffer
