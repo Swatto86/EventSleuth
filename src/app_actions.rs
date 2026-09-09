@@ -182,6 +182,7 @@ impl EventSleuthApp {
 
             // Arrow keys for event navigation
             if no_text_field_focus {
+                let selection_before = self.selected_event_idx;
                 if i.key_pressed(egui::Key::ArrowDown) {
                     if let Some(idx) = self.selected_event_idx {
                         if idx + 1 < self.filtered_indices.len() {
@@ -224,6 +225,11 @@ impl EventSleuthApp {
                 // End = jump to last event
                 if i.key_pressed(egui::Key::End) && !self.filtered_indices.is_empty() {
                     self.selected_event_idx = Some(self.filtered_indices.len().saturating_sub(1));
+                }
+
+                if self.selected_event_idx != selection_before {
+                    // Keyboard moved the selection: ask the table to scroll to it.
+                    self.scroll_to_selected = true;
                 }
             }
         });

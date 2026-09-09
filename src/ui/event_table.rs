@@ -100,6 +100,10 @@ impl EventSleuthApp {
             return;
         }
 
+        // Consume the one-shot keyboard scroll request.
+        let scroll_target =
+            take_scroll_target(&mut self.scroll_to_selected, self.selected_event_idx);
+
         let table = TableBuilder::new(ui)
             .striped(true)
             .resizable(true)
@@ -142,6 +146,10 @@ impl EventSleuthApp {
             table.column(Column::remainder().clip(true))
         } else {
             table
+        };
+        let table = match scroll_target {
+            Some(row) => table.scroll_to_row(row, Some(egui::Align::Center)),
+            None => table,
         };
         let table = table.sense(egui::Sense::click());
 
@@ -409,5 +417,53 @@ impl EventSleuthApp {
                 self.selected_event_idx = self.filtered_indices.iter().position(|&i| i == ev_idx);
             }
         }
+    }
+}
+
+// ── Keyboard scroll request (pure, testable) ────────────────────────────
+
+/// Consume the one-shot "scroll to selection" request.
+///
+/// Returns the row the table should scroll to and clears the flag, so the
+/// table follows keyboard navigation exactly once and never fights the user's
+/// mouse wheel on subsequent frames.
+pub(crate) fn take_scroll_target(
+    scroll_to_selected: &mut bool,
+    selected: Option<usize>,
+) -> Option<usize> {
+    if *scroll_to_selected {
+        *scroll_to_selected = false;
+        selected
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod scroll_target_tests {
+    use super::take_scroll_target;
+
+    /// Keyboard navigation must make the table scroll to the selected row.
+    #[test]
+    fn pending_request_yields_the_selected_row() {
+        let mut flag = true;
+        assert_eq!(take_scroll_target(&mut flag, Some(42)), Some(42));
+    }
+
+    /// The request is one-shot: later frames must not keep re-scrolling, or
+    /// the table would snap back whenever the user scrolls with the mouse.
+    #[test]
+    fn request_is_consumed_after_one_frame() {
+        let mut flag = true;
+        let _ = take_scroll_target(&mut flag, Some(42));
+        assert!(!flag, "flag must be cleared once consumed");
+        assert_eq!(take_scroll_target(&mut flag, Some(42)), None);
+    }
+
+    /// With no pending request the table is left where the user put it.
+    #[test]
+    fn no_request_means_no_scroll() {
+        let mut flag = false;
+        assert_eq!(take_scroll_target(&mut flag, Some(7)), None);
     }
 }

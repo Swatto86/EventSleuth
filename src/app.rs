@@ -100,6 +100,9 @@ pub struct EventSleuthApp {
     pub selected_event_idx: Option<usize>,
     /// Flag: re-compute `filtered_indices` on the next frame.
     pub needs_refilter: bool,
+    /// One-shot request to scroll the event table to `selected_event_idx`.
+    /// Set by keyboard navigation, consumed by `render_event_table`.
+    pub scroll_to_selected: bool,
 
     // ── Filter ──────────────────────────────────────────────────
     /// All active filter criteria.
@@ -276,6 +279,7 @@ impl EventSleuthApp {
             filtered_indices: Vec::new(),
             selected_event_idx: None,
             needs_refilter: false,
+            scroll_to_selected: false,
 
             filter: FilterState::default(),
 
