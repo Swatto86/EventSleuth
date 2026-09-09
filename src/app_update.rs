@@ -505,6 +505,13 @@ impl eframe::App for EventSleuthApp {
             ctx.request_repaint();
         }
 
+        // 6b. Keep polling while a background export or file dialog is
+        // outstanding, otherwise their completion messages are only
+        // processed on the next incidental repaint.
+        if self.export_rx.is_some() || self.import_rx.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        }
+
         // 7. Live tail: periodic re-query for new events
         if self.live_tail && !self.is_loading {
             let should_tail = match self.last_tail_time {
