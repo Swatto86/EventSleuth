@@ -959,9 +959,11 @@ mod clear_all_tests {
     /// The filter state itself is still reset.
     #[test]
     fn clearing_resets_the_filter_state() {
-        let mut filter = FilterState::default();
-        filter.text_search = "boom".into();
-        filter.event_id_input = "4624".into();
+        let mut filter = FilterState {
+            text_search: "boom".into(),
+            event_id_input: "4624".into(),
+            ..FilterState::default()
+        };
         filter.levels[5] = false;
         let mut bookmarks_only = false;
         reset_all_narrowing(&mut filter, &mut bookmarks_only);
