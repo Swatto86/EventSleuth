@@ -174,3 +174,17 @@ fn test_preset_preserves_regex_flag() {
     assert!(restored.use_regex);
     assert_eq!(restored.text_search, r"\d+");
 }
+
+#[test]
+fn test_out_of_range_level_agrees_with_verbose_bucket() {
+    // A provider-defined level above 5 must be named and filtered the same way.
+    assert_eq!(EventRecord::level_to_name(7), "Verbose");
+    assert_eq!(EventRecord::level_bucket(7), 5);
+
+    let mut f = FilterState::default();
+    f.levels = [true, true, true, true, true, false]; // Verbose off
+    assert!(
+        !f.matches(&make_event(1, 7, "P", "m")),
+        "a level-7 event is displayed as Verbose, so unchecking Verbose must hide it"
+    );
+}

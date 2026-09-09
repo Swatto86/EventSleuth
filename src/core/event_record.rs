@@ -74,10 +74,23 @@ pub struct EventRecord {
 }
 
 impl EventRecord {
+    /// Index into the six-element severity arrays (`FilterState::levels`,
+    /// `EventStats::level_counts`) for a numeric ETW level.
+    ///
+    /// This is the single definition of the level-to-bucket rule; the filter,
+    /// the statistics panel and [`EventRecord::level_to_name`] must all agree
+    /// with it. Levels above 5 are provider-defined and fall into the Verbose
+    /// bucket.
+    pub fn level_bucket(level: u8) -> usize {
+        (level as usize).min(5)
+    }
+
     /// Returns the human-readable level name for a given numeric level.
     ///
-    /// Maps the standard ETW level values to display strings. Unknown values
-    /// are formatted as `"Level(N)"`.
+    /// Maps the standard ETW level values to display strings.  Provider-defined
+    /// levels above 5 are more verbose than Verbose, so they are reported as
+    /// "Verbose" — the same bucket [`EventRecord::level_bucket`] assigns them
+    /// to, which is what the Level filter and the statistics panel use.
     pub fn level_to_name(level: u8) -> &'static str {
         match level {
             0 => "LogAlways",
@@ -85,8 +98,9 @@ impl EventRecord {
             2 => "Error",
             3 => "Warning",
             4 => "Information",
-            5 => "Verbose",
-            _ => "Unknown",
+            // 5 is Verbose; provider-defined levels above it are more verbose
+            // still and share the Verbose bucket (see `level_bucket`).
+            _ => "Verbose",
         }
     }
 

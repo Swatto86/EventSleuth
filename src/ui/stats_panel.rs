@@ -54,7 +54,7 @@ impl EventSleuthApp {
 
         for &idx in indices {
             let event = &events[idx];
-            let level_idx = (event.level as usize).min(5);
+            let level_idx = crate::core::event_record::EventRecord::level_bucket(event.level);
             level_counts[level_idx] += 1;
             *provider_counts
                 .entry(event.provider_name.as_str())

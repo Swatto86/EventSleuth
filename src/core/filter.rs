@@ -241,7 +241,7 @@ impl FilterState {
     /// 5. Text search (most expensive)
     pub fn matches(&self, event: &EventRecord) -> bool {
         // 1. Level filter — O(1) array index
-        let level_idx = (event.level as usize).min(5);
+        let level_idx = EventRecord::level_bucket(event.level);
         if !self.levels[level_idx] {
             return false;
         }
