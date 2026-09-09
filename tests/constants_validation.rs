@@ -127,21 +127,3 @@ fn live_tail_cap_is_defined_and_larger_than_per_channel_max() {
         "MAX_TOTAL_EVENTS_CAP must equal MAX_EVENTS_PER_CHANNEL * 4"
     );
 }
-
-/// Regression test for Bug B (resource bounds): eviction arithmetic must be
-/// exact.  When `all_events.len()` exceeds the cap by `excess` entries, we
-/// must drain exactly `excess` items from the front, leaving the length at
-/// exactly the cap.
-#[test]
-fn live_tail_eviction_arithmetic_is_exact() {
-    let cap = MAX_TOTAL_EVENTS_CAP;
-    // Simulate: 10 tail events pushed on top of a full cap
-    let current_len = cap + 10;
-    let evict = current_len - cap;
-    let after_eviction = current_len - evict;
-    assert_eq!(
-        after_eviction, cap,
-        "after evicting {evict} items the length must equal the cap ({cap})"
-    );
-    assert_eq!(evict, 10, "must evict exactly the excess (10)");
-}

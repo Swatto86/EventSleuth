@@ -154,8 +154,12 @@ impl EventSleuthApp {
                             self.max_events_per_channel,
                             self.selected_channels.len(),
                         );
-                        if self.is_tail_query && self.all_events.len() > cap {
-                            let evict = self.all_events.len() - cap;
+                        let evict = tail_evict_count(
+                            self.all_events.len(),
+                            self.max_events_per_channel,
+                            self.selected_channels.len(),
+                        );
+                        if self.is_tail_query && evict > 0 {
                             self.all_events.drain(0..evict);
                             self.filtered_indices.clear();
                             self.selected_event_idx = None;
@@ -395,6 +399,19 @@ pub(crate) fn effective_tail_cap(max_events_per_channel: usize, channel_count: u
     constants::MAX_TOTAL_EVENTS_CAP.max(per_load.saturating_mul(2))
 }
 
+/// Number of oldest events that must be evicted so that a collection of `len`
+/// events fits within the live-tail cap for `max_events_per_channel` across
+/// `channel_count` channels.
+///
+/// Returns 0 when the collection is already within the cap.
+pub(crate) fn tail_evict_count(
+    len: usize,
+    max_events_per_channel: usize,
+    channel_count: usize,
+) -> usize {
+    len.saturating_sub(effective_tail_cap(max_events_per_channel, channel_count))
+}
+
 // ── Error-list helper (pure, testable) ──────────────────────────────────
 
 /// Append `(channel, error)` to `errors` unless an identical pair is already
@@ -607,7 +624,7 @@ impl eframe::App for EventSleuthApp {
 
 #[cfg(test)]
 mod tail_cap_tests {
-    use super::effective_tail_cap;
+    use super::{effective_tail_cap, tail_evict_count};
     use crate::util::constants;
 
     /// With the default per-channel max, the cap equals the compile-time
@@ -648,6 +665,35 @@ mod tail_cap_tests {
     #[test]
     fn cap_saturates_instead_of_overflowing() {
         assert_eq!(effective_tail_cap(usize::MAX, 8), usize::MAX);
+    }
+
+    /// Eviction count is zero while the collection fits within the cap.
+    #[test]
+    fn no_eviction_below_cap() {
+        let cap = effective_tail_cap(constants::MAX_EVENTS_PER_CHANNEL, 1);
+        assert_eq!(
+            tail_evict_count(cap, constants::MAX_EVENTS_PER_CHANNEL, 1),
+            0
+        );
+        assert_eq!(tail_evict_count(0, constants::MAX_EVENTS_PER_CHANNEL, 1), 0);
+    }
+
+    /// Draining `tail_evict_count` items from the front leaves the collection
+    /// at exactly the cap, oldest first.
+    #[test]
+    fn eviction_drains_exactly_the_excess() {
+        let per_channel = 1_000usize;
+        let cap = effective_tail_cap(per_channel, 1);
+        let mut events: Vec<usize> = (0..cap + 10).collect();
+        let evict = tail_evict_count(events.len(), per_channel, 1);
+        assert_eq!(evict, 10, "must evict exactly the excess");
+        events.drain(0..evict);
+        assert_eq!(
+            events.len(),
+            cap,
+            "length must equal the cap after eviction"
+        );
+        assert_eq!(events[0], 10, "the oldest entries must be the ones removed");
     }
 
     /// Regression test: a multi-channel full load must fit inside the tail cap.
