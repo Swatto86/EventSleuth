@@ -91,11 +91,7 @@ impl EventSleuthApp {
                             })
                             .clicked()
                         {
-                            if is_bookmarked {
-                                self.bookmarked_indices.remove(&ev_idx);
-                            } else {
-                                self.bookmarked_indices.insert(ev_idx);
-                            }
+                            self.toggle_bookmark(ev_idx);
                         }
                     }
                 }

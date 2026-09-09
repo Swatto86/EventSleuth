@@ -349,15 +349,7 @@ impl EventSleuthApp {
 
         // Apply deferred bookmark toggle
         if let Some(idx) = bookmark_toggle.get() {
-            if self.bookmarked_indices.contains(&idx) {
-                self.bookmarked_indices.remove(&idx);
-            } else {
-                self.bookmarked_indices.insert(idx);
-            }
-            // If in bookmarks-only mode, refilter to update the view
-            if self.show_bookmarks_only {
-                self.needs_refilter = true;
-            }
+            self.toggle_bookmark(idx);
         }
     }
 

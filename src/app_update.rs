@@ -332,6 +332,23 @@ impl EventSleuthApp {
         });
     }
 
+    /// Toggle the bookmark on the event at `event_idx` (an index into
+    /// `all_events`).
+    ///
+    /// Single source of truth for bookmark toggling: when bookmarks-only mode
+    /// is active the visible row set depends on `bookmarked_indices`, so a
+    /// refilter must be requested. Call sites that duplicated this logic
+    /// previously disagreed about that step.
+    pub fn toggle_bookmark(&mut self, event_idx: usize) {
+        if apply_bookmark_toggle(
+            &mut self.bookmarked_indices,
+            event_idx,
+            self.show_bookmarks_only,
+        ) {
+            self.needs_refilter = true;
+        }
+    }
+
     /// Get a reference to the currently selected event, if any.
     pub fn selected_event(&self) -> Option<&EventRecord> {
         let vis_idx = self.selected_event_idx?;
@@ -410,6 +427,25 @@ pub(crate) fn tail_evict_count(
     channel_count: usize,
 ) -> usize {
     len.saturating_sub(effective_tail_cap(max_events_per_channel, channel_count))
+}
+
+// ── Bookmark-toggle helper (pure, testable) ─────────────────────────────
+
+/// Toggle `event_idx` in `bookmarks`.
+///
+/// Returns `true` when the table's visible rows depend on the bookmark set
+/// (bookmarks-only mode), meaning the caller must request a refilter —
+/// otherwise an unpinned row stays on screen until some unrelated action
+/// happens to refilter.
+pub(crate) fn apply_bookmark_toggle(
+    bookmarks: &mut std::collections::HashSet<usize>,
+    event_idx: usize,
+    show_bookmarks_only: bool,
+) -> bool {
+    if !bookmarks.remove(&event_idx) {
+        bookmarks.insert(event_idx);
+    }
+    show_bookmarks_only
 }
 
 // ── Error-list helper (pure, testable) ──────────────────────────────────
@@ -843,5 +879,39 @@ mod push_error_tests {
             push_error_deduped(&mut errors, format!("ch{i}"), "boom".into());
         }
         assert_eq!(errors.len(), constants::MAX_ERRORS);
+    }
+}
+
+#[cfg(test)]
+mod bookmark_toggle_tests {
+    use super::apply_bookmark_toggle;
+    use std::collections::HashSet;
+
+    /// Toggling adds then removes the index.
+    #[test]
+    fn toggle_adds_then_removes() {
+        let mut b: HashSet<usize> = HashSet::new();
+        apply_bookmark_toggle(&mut b, 7, false);
+        assert!(b.contains(&7));
+        apply_bookmark_toggle(&mut b, 7, false);
+        assert!(!b.contains(&7));
+    }
+
+    /// Regression test: unpinning while "Bookmarks only" is on must request a
+    /// refilter, otherwise the row stays visible after its star is cleared.
+    #[test]
+    fn toggle_in_bookmarks_only_mode_requests_refilter() {
+        let mut b: HashSet<usize> = HashSet::from([3]);
+        assert!(
+            apply_bookmark_toggle(&mut b, 3, true),
+            "bookmarks-only mode must request a refilter"
+        );
+    }
+
+    /// With bookmarks-only off the visible rows do not change, so no refilter.
+    #[test]
+    fn toggle_without_bookmarks_only_needs_no_refilter() {
+        let mut b: HashSet<usize> = HashSet::new();
+        assert!(!apply_bookmark_toggle(&mut b, 3, false));
     }
 }
