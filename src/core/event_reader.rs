@@ -142,6 +142,7 @@ fn reader_thread_main(
             &cancel,
             &mut publisher_cache,
             max_events,
+            total,
         ) {
             Ok(count) => {
                 total += count;
@@ -211,6 +212,7 @@ fn file_reader_thread_main(
         &cancel,
         &mut publisher_cache,
         max_events,
+        0,
     ) {
         Ok(count) => {
             let _ = sender.send(ReaderMessage::Progress {
@@ -264,6 +266,7 @@ fn read_channel(
     cancel: &Arc<AtomicBool>,
     publisher_cache: &mut HashMap<String, EVT_HANDLE>,
     max_events: usize,
+    base_count: usize,
 ) -> Result<usize, EventSleuthError> {
     let xpath = build_xpath_query(time_from, time_to);
     let channel_wide = to_wide(channel);
@@ -416,6 +419,12 @@ fn read_channel(
         count += batch.len();
         if !batch.is_empty() {
             let _ = sender.send(ReaderMessage::EventBatch(batch));
+            // Report incremental progress so the UI can show a live count and
+            // the name of the channel currently being read.
+            let _ = sender.send(ReaderMessage::Progress {
+                count: base_count + count,
+                channel: channel.to_string(),
+            });
         }
     }
 

@@ -47,6 +47,18 @@ pub(crate) fn status_display(
     }
 }
 
+/// Build the loading label shown while a query is in flight.
+///
+/// Before the first `Progress` message arrives the channel name is empty; do
+/// not render an empty count and empty parentheses in that case.
+pub(crate) fn loading_status_text(count: usize, channel: &str) -> String {
+    if channel.is_empty() {
+        "Loading...".to_string()
+    } else {
+        format!("Loading... {count} events ({channel})")
+    }
+}
+
 impl EventSleuthApp {
     /// Render the status bar at the bottom of the window.
     ///
@@ -90,10 +102,7 @@ impl EventSleuthApp {
                     let progress = if self.is_tail_query {
                         "Checking for new events...".to_string()
                     } else {
-                        format!(
-                            "Loading... {} events ({})",
-                            self.progress_count, self.progress_channel
-                        )
+                        loading_status_text(self.progress_count, &self.progress_channel)
                     };
                     ui.label(egui::RichText::new(progress).color(theme::text_secondary(dark)));
                 }
@@ -279,6 +288,26 @@ mod status_display_tests {
         assert_eq!(
             status_display(false, false, false, false, false),
             StatusDisplay::Ready
+        );
+    }
+}
+
+#[cfg(test)]
+mod loading_status_tests {
+    use super::loading_status_text;
+
+    /// Regression test: with no progress message yet the label must not read
+    /// "Loading... 0 events ()".
+    #[test]
+    fn empty_channel_renders_plain_loading_label() {
+        assert_eq!(loading_status_text(0, ""), "Loading...");
+    }
+
+    #[test]
+    fn known_channel_renders_count_and_name() {
+        assert_eq!(
+            loading_status_text(1234, "Security"),
+            "Loading... 1234 events (Security)"
         );
     }
 }
