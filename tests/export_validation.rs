@@ -46,17 +46,19 @@ fn validate_export_path_does_not_clobber_predictable_probe_file() {
 #[test]
 fn validate_export_path_no_parent() {
     let path = PathBuf::from("just_a_filename.csv");
-    // On Windows this resolves to CWD which should exist, or the parent is ""
-    // The function should handle this gracefully
+    // `Path::new("just_a_filename.csv").parent()` is `Some("")`, and the empty
+    // path does not exist, so validation must reject a bare filename rather
+    // than silently writing into the process working directory.
     let result = validate_export_path(&path);
-    // Either succeeds (CWD is writable) or fails with a clear message
-    if let Err(e) = result {
-        let msg = e.to_string();
-        assert!(
-            msg.contains("parent") || msg.contains("directory"),
-            "Error should mention directory: {msg}"
-        );
-    }
+    assert!(
+        result.is_err(),
+        "a bare filename with no parent directory must be rejected: {result:?}"
+    );
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("parent") || msg.contains("directory"),
+        "Error should mention directory: {msg}"
+    );
 }
 
 #[test]
