@@ -195,9 +195,7 @@ impl EventSleuthApp {
                         }
                     }
                     ReaderMessage::Error { channel, error } => {
-                        if self.errors.len() < constants::MAX_ERRORS {
-                            self.errors.push((channel, error));
-                        }
+                        push_error_deduped(&mut self.errors, channel, error);
                     }
                 },
                 Err(crossbeam_channel::TryRecvError::Empty) => break,
@@ -220,9 +218,7 @@ impl EventSleuthApp {
             self.stats_dirty = true;
             let msg = "Reader thread terminated unexpectedly (check log for details)".to_string();
             tracing::error!("{}", msg);
-            if self.errors.len() < constants::MAX_ERRORS {
-                self.errors.push(("(internal)".into(), msg.clone()));
-            }
+            push_error_deduped(&mut self.errors, "(internal)".into(), msg.clone());
             self.status_text = msg;
         }
 
@@ -384,6 +380,28 @@ impl EventSleuthApp {
 /// first live-tail poll.
 pub(crate) fn effective_tail_cap(max_events_per_channel: usize) -> usize {
     constants::MAX_TOTAL_EVENTS_CAP.max(max_events_per_channel.saturating_mul(4))
+}
+
+// ── Error-list helper (pure, testable) ──────────────────────────────────
+
+/// Append `(channel, error)` to `errors` unless an identical pair is already
+/// present, and only while the list is below [`constants::MAX_ERRORS`].
+///
+/// Live-tail re-queries the same channels every few seconds; without the
+/// duplicate check a single persistent failure (e.g. Security access denied)
+/// would fill the list with identical entries, making the status-bar badge
+/// meaningless and eventually crowding out genuinely new errors.
+pub(crate) fn push_error_deduped(
+    errors: &mut Vec<(String, String)>,
+    channel: String,
+    error: String,
+) {
+    if errors.iter().any(|(c, e)| c == &channel && e == &error) {
+        return;
+    }
+    if errors.len() < constants::MAX_ERRORS {
+        errors.push((channel, error));
+    }
 }
 
 // ── Bookmark-notice helper (pure, testable) ─────────────────────────────
@@ -698,5 +716,45 @@ mod bookmark_notice_tests {
     #[test]
     fn no_notice_when_nothing_was_pinned() {
         assert!(bookmark_clear_notice(0).is_none());
+    }
+}
+
+#[cfg(test)]
+mod push_error_tests {
+    use super::push_error_deduped;
+    use crate::util::constants;
+
+    /// A repeated live-tail failure must be stored exactly once.
+    #[test]
+    fn repeated_identical_error_is_stored_once() {
+        let mut errors: Vec<(String, String)> = Vec::new();
+        for _ in 0..50 {
+            push_error_deduped(
+                &mut errors,
+                "Security".into(),
+                "Windows API error: EvtQuery (HRESULT: 0x80070005)".into(),
+            );
+        }
+        assert_eq!(errors.len(), 1, "identical errors must not accumulate");
+    }
+
+    /// Distinct errors are still recorded.
+    #[test]
+    fn distinct_errors_are_all_stored() {
+        let mut errors: Vec<(String, String)> = Vec::new();
+        push_error_deduped(&mut errors, "Security".into(), "denied".into());
+        push_error_deduped(&mut errors, "System".into(), "denied".into());
+        push_error_deduped(&mut errors, "Security".into(), "timeout".into());
+        assert_eq!(errors.len(), 3);
+    }
+
+    /// The MAX_ERRORS cap is still honoured for distinct errors.
+    #[test]
+    fn cap_is_respected() {
+        let mut errors: Vec<(String, String)> = Vec::new();
+        for i in 0..(constants::MAX_ERRORS + 10) {
+            push_error_deduped(&mut errors, format!("ch{i}"), "boom".into());
+        }
+        assert_eq!(errors.len(), constants::MAX_ERRORS);
     }
 }
