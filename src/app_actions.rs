@@ -364,6 +364,31 @@ impl EventSleuthApp {
     }
 }
 
+// ── Live-tail timestamp helper (pure, testable) ─────────────────────────
+
+/// Advance the newest loaded event timestamp by 1 ms to form the lower bound
+/// of the next tail query.
+///
+/// Returns `None` when there is no newest timestamp, and also when the add
+/// overflows at `DateTime<Utc>::MAX_UTC` — in that case the tail poll is
+/// skipped rather than silently re-delivering the last event on every tick.
+pub(crate) fn next_tail_from(
+    newest: Option<chrono::DateTime<chrono::Utc>>,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    newest.and_then(
+        |t| match t.checked_add_signed(chrono::Duration::milliseconds(1)) {
+            Some(advanced) => Some(advanced),
+            None => {
+                tracing::warn!(
+                    "start_tail_query: newest timestamp is at DateTime::MAX, \
+                     skipping tail poll to avoid re-delivering last event"
+                );
+                None // None causes spawn_reader_thread to use filter.time_from
+            }
+        },
+    )
+}
+
 // ── Live tail ───────────────────────────────────────────────────────────
 
 impl EventSleuthApp {
@@ -381,18 +406,7 @@ impl EventSleuthApp {
         // If the add overflows, log a warning and skip the tail poll rather than
         // silently re-delivering the last event on every tick (which happened
         // with the old `unwrap_or(t)` fallback — Bug fix: infinite re-delivery).
-        let tail_from = newest.and_then(|t| {
-            match t.checked_add_signed(chrono::Duration::milliseconds(1)) {
-                Some(advanced) => Some(advanced),
-                None => {
-                    tracing::warn!(
-                        "start_tail_query: newest timestamp is at DateTime::MAX, \
-                         skipping tail poll to avoid re-delivering last event"
-                    );
-                    None // None causes spawn_reader_thread to use filter.time_from
-                }
-            }
-        });
+        let tail_from = next_tail_from(newest);
 
         let (tx, rx) = crossbeam_channel::bounded(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));
@@ -503,36 +517,33 @@ impl EventSleuthApp {
 
 #[cfg(test)]
 mod tail_datetime_tests {
-    /// Regression test for B2: adding 1 ms to DateTime<Utc>::MAX must return
-    /// None (overflow) so the tail poll is skipped rather than re-delivering
-    /// the last event on every tick.
-    ///
-    /// The old code used `.unwrap_or(t)` which fell back to the un-incremented
-    /// timestamp; start_tail_query would then re-query from the exact same
-    /// timestamp each tick, causing the last event to be re-delivered on every
-    /// live-tail cycle (Bug fix: infinite re-delivery on DateTime::MAX overflow).
+    use super::next_tail_from;
+    use chrono::{Duration, TimeZone, Utc};
+
+    /// Regression test for B2: at `DateTime<Utc>::MAX_UTC` the helper must
+    /// return `None` so the tail poll is skipped, rather than falling back to
+    /// the un-incremented timestamp (the old `.unwrap_or(t)` behaviour, which
+    /// re-delivered the last event on every live-tail tick).
     #[test]
     fn tail_from_near_max_datetime_overflow_returns_none() {
-        use chrono::Duration;
-        // Use the maximum representable chrono::DateTime<chrono::Utc> value.
-        let max_dt = chrono::DateTime::<chrono::Utc>::MAX_UTC;
-        // The new logic uses and_then which propagates None on overflow.
-        let tail_from = max_dt.checked_add_signed(Duration::milliseconds(1));
-        // On overflow checked_add_signed returns None, NOT the original timestamp.
+        let max_dt = chrono::DateTime::<Utc>::MAX_UTC;
         assert!(
-            tail_from.is_none(),
-            "adding 1 ms to DateTime::MAX must return None (overflow), not wrap"
+            next_tail_from(Some(max_dt)).is_none(),
+            "at DateTime::MAX the tail lower bound must be None, not the original timestamp"
         );
     }
 
-    /// Normal case: adding 1 ms to a typical timestamp must increment it by exactly 1 ms.
+    /// No loaded events means no tail lower bound.
+    #[test]
+    fn tail_from_none_input_returns_none() {
+        assert!(next_tail_from(None).is_none());
+    }
+
+    /// Normal case: the helper advances a typical timestamp by exactly 1 ms.
     #[test]
     fn tail_from_normal_datetime_increments_by_1ms() {
-        use chrono::{Duration, TimeZone, Utc};
         let ts = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
-        let result = ts
-            .checked_add_signed(Duration::milliseconds(1))
-            .unwrap_or(ts);
-        assert_eq!(result - ts, Duration::milliseconds(1));
+        let advanced = next_tail_from(Some(ts)).expect("normal timestamp must advance");
+        assert_eq!(advanced - ts, Duration::milliseconds(1));
     }
 }
