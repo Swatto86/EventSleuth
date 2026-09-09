@@ -129,6 +129,51 @@ impl EventSleuthApp {
 
 // ── Keyboard shortcuts ──────────────────────────────────────────────────
 
+/// What a press of Escape dismisses, given which transient UI is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EscapeTarget {
+    /// A query is running: cancel it.
+    CancelLoading,
+    About,
+    ChannelSelector,
+    SavePreset,
+    Stats,
+    Errors,
+    /// Nothing is open: clear the table selection.
+    Selection,
+}
+
+/// Which transient UI is currently open, as seen by the Escape handler.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct OpenUi {
+    pub is_loading: bool,
+    pub about: bool,
+    pub channel_selector: bool,
+    pub save_preset: bool,
+    pub stats: bool,
+    pub errors: bool,
+}
+
+/// Decide what Escape should dismiss. Every window the user can open must be
+/// listed here, otherwise it cannot be closed from the keyboard.
+pub(crate) fn escape_target(open: OpenUi) -> EscapeTarget {
+    if open.is_loading {
+        EscapeTarget::CancelLoading
+    } else if open.about {
+        EscapeTarget::About
+    } else if open.channel_selector {
+        EscapeTarget::ChannelSelector
+    } else if open.save_preset {
+        EscapeTarget::SavePreset
+    } else if open.stats {
+        EscapeTarget::Stats
+    } else if open.errors {
+        EscapeTarget::Errors
+    } else {
+        EscapeTarget::Selection
+    }
+}
+
 impl EventSleuthApp {
     /// Handle global keyboard shortcuts.
     ///
@@ -162,21 +207,29 @@ impl EventSleuthApp {
             // Closing a dialog resets its transient input state so the
             // behaviour matches the dialog's own Cancel / close button.
             if i.key_pressed(egui::Key::Escape) {
-                if self.is_loading {
-                    self.cancel_loading();
-                } else if self.show_about {
-                    self.show_about = false;
-                } else if self.show_channel_selector {
-                    self.show_channel_selector = false;
-                    self.channel_search.clear();
-                } else if self.show_save_preset {
-                    self.show_save_preset = false;
-                    self.preset_name_input.clear();
-                    self.save_preset_focus_requested = false;
-                } else if self.show_stats {
-                    self.show_stats = false;
-                } else {
-                    self.selected_event_idx = None;
+                let open = OpenUi {
+                    is_loading: self.is_loading,
+                    about: self.show_about,
+                    channel_selector: self.show_channel_selector,
+                    save_preset: self.show_save_preset,
+                    stats: self.show_stats,
+                    errors: self.show_errors,
+                };
+                match escape_target(open) {
+                    EscapeTarget::CancelLoading => self.cancel_loading(),
+                    EscapeTarget::About => self.show_about = false,
+                    EscapeTarget::ChannelSelector => {
+                        self.show_channel_selector = false;
+                        self.channel_search.clear();
+                    }
+                    EscapeTarget::SavePreset => {
+                        self.show_save_preset = false;
+                        self.preset_name_input.clear();
+                        self.save_preset_focus_requested = false;
+                    }
+                    EscapeTarget::Stats => self.show_stats = false,
+                    EscapeTarget::Errors => self.show_errors = false,
+                    EscapeTarget::Selection => self.selected_event_idx = None,
                 }
             }
 
@@ -568,5 +621,51 @@ mod tail_datetime_tests {
         let max_dt = chrono::DateTime::<Utc>::MAX_UTC;
         let bound = next_tail_from(Some(max_dt)).expect("bound must be computable at MAX");
         assert!(bound <= max_dt, "bound must never advance past newest");
+    }
+}
+
+#[cfg(test)]
+mod escape_target_tests {
+    use super::{escape_target, EscapeTarget, OpenUi};
+
+    /// Regression test: the error-details window must be dismissible with
+    /// Escape like every other window in the app.
+    #[test]
+    fn escape_closes_the_errors_window() {
+        let open = OpenUi {
+            errors: true,
+            ..Default::default()
+        };
+        assert_eq!(escape_target(open), EscapeTarget::Errors);
+    }
+
+    /// A running query takes precedence over any open window.
+    #[test]
+    fn loading_takes_precedence() {
+        let open = OpenUi {
+            is_loading: true,
+            errors: true,
+            about: true,
+            ..Default::default()
+        };
+        assert_eq!(escape_target(open), EscapeTarget::CancelLoading);
+    }
+
+    /// Dialogs that already handled Escape keep their precedence over the
+    /// newly added errors window.
+    #[test]
+    fn existing_dialogs_keep_precedence_over_errors() {
+        let open = OpenUi {
+            stats: true,
+            errors: true,
+            ..Default::default()
+        };
+        assert_eq!(escape_target(open), EscapeTarget::Stats);
+    }
+
+    /// With nothing open, Escape clears the table selection.
+    #[test]
+    fn nothing_open_clears_selection() {
+        assert_eq!(escape_target(OpenUi::default()), EscapeTarget::Selection);
     }
 }

@@ -143,6 +143,8 @@ pub struct EventSleuthApp {
     // ── Dialogs ─────────────────────────────────────────────────
     /// Whether the About dialog is open.
     pub show_about: bool,
+    /// Whether the error-details window is open.
+    pub show_errors: bool,
 
     // ── Theme ───────────────────────────────────────────────────
     /// `true` = dark mode (default), `false` = light mode.
@@ -300,6 +302,7 @@ impl EventSleuthApp {
             detail_tab: DetailTab::Details,
 
             show_about: false,
+            show_errors: false,
 
             dark_mode: true,
 

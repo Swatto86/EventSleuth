@@ -576,6 +576,7 @@ impl eframe::App for EventSleuthApp {
         self.render_about_dialog(ctx);
         self.render_save_preset_dialog(ctx);
         self.render_stats_panel(ctx);
+        self.render_errors_dialog(ctx);
     }
 
     /// Return the clear colour used before each frame render.
