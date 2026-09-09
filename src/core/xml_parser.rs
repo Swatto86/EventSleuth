@@ -214,7 +214,11 @@ fn parse_system_time(s: &str) -> Option<DateTime<Utc>> {
         if let Some(z_pos) = s.find('Z') {
             if z_pos > dot_pos + 1 {
                 let frac = &s[dot_pos + 1..z_pos];
-                if frac.len() > 6 {
+                // `frac.len()` is a byte count. Windows always emits ASCII
+                // digits here, but a malformed attribute could put a
+                // multi-byte character across byte 6, and slicing there would
+                // panic. Fall through to the NaiveDateTime fallback instead.
+                if frac.len() > 6 && frac.is_char_boundary(6) {
                     let truncated = format!("{}.{}Z", &s[..dot_pos], &frac[..6]);
                     if let Ok(dt) = DateTime::parse_from_rfc3339(&truncated) {
                         return Some(dt.with_timezone(&Utc));
@@ -350,6 +354,21 @@ mod tests {
         assert!(
             result.is_none(),
             "malformed timestamp should return None, not panic"
+        );
+    }
+
+    /// A malformed SystemTime whose fractional part contains a multi-byte
+    /// character straddling byte offset 6 must return None, not panic on a
+    /// non-char-boundary slice.
+    #[test]
+    fn test_parse_system_time_multibyte_fraction_returns_none() {
+        // Fractional part is "abcde\u{e9}xx": 'a'..'e' occupy bytes 0..5 and
+        // the two-byte 'e-acute' occupies bytes 5..7, so byte 6 is a
+        // continuation byte and not a character boundary.
+        let result = parse_system_time("2024-01-15T10:23:45.abcde\u{e9}xxZ");
+        assert!(
+            result.is_none(),
+            "malformed fractional seconds should return None, not panic"
         );
     }
 
