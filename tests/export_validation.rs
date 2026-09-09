@@ -24,6 +24,23 @@ fn validate_export_path_nonexistent_directory() {
 }
 
 #[test]
+fn validate_export_path_does_not_clobber_predictable_probe_file() {
+    let dir = std::env::temp_dir().join("eventsleuth_probe_clobber_test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let victim = dir.join(".eventsleuth_write_probe");
+    std::fs::write(&victim, b"important").unwrap();
+
+    let target = dir.join("out.csv");
+    validate_export_path(&target).expect("temp dir should be writable");
+
+    let content = std::fs::read(&victim).expect("pre-existing file must not have been deleted");
+    assert_eq!(content, b"important", "pre-existing file must not be truncated");
+
+    let _ = std::fs::remove_file(&victim);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn validate_export_path_no_parent() {
     let path = PathBuf::from("just_a_filename.csv");
     // On Windows this resolves to CWD which should exist, or the parent is ""

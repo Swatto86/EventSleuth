@@ -24,9 +24,23 @@ pub fn validate_export_path(path: &Path) -> Result<(), EventSleuthError> {
         )));
     }
 
-    // Probe writability by creating a temporary file in the target directory.
-    let probe = parent.join(".eventsleuth_write_probe");
-    match std::fs::File::create(&probe) {
+    // Probe writability with an unpredictable, exclusively-created file so a
+    // pre-planted file or hardlink at a guessable path can never be truncated
+    // or deleted by the probe.
+    let unique = format!(
+        ".eventsleuth_write_probe_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    );
+    let probe = parent.join(unique);
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
         Ok(_) => {
             let _ = std::fs::remove_file(&probe);
             Ok(())
