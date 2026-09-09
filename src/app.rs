@@ -358,7 +358,7 @@ impl EventSleuthApp {
                 app.filter_presets = presets;
             }
             if let Some(max_ev) = eframe::get_value::<usize>(storage, "max_events_per_channel") {
-                app.max_events_per_channel = max_ev.clamp(1000, 10_000_000);
+                app.max_events_per_channel = crate::util::constants::clamp_max_events(max_ev);
                 // Sync the text binding so the field shows the restored value.
                 app.max_events_input = app.max_events_per_channel.to_string();
             }

@@ -398,7 +398,7 @@ impl EventSleuthApp {
             );
             if re.changed() {
                 if let Ok(val) = self.max_events_input.replace(',', "").trim().parse::<usize>() {
-                    self.max_events_per_channel = val.clamp(1_000, 10_000_000);
+                    self.max_events_per_channel = crate::util::constants::clamp_max_events(val);
                 }
             }
             re.on_hover_text(

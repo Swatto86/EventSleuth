@@ -102,3 +102,20 @@ pub const MAX_LOG_FILE_SIZE: u64 = 5 * 1024 * 1024;
 /// The value is intentionally generous (4 × the default per-channel max) so
 /// accidental trimming never occurs during a plain full load.
 pub const MAX_TOTAL_EVENTS_CAP: usize = MAX_EVENTS_PER_CHANNEL * 4;
+
+/// Lower bound for the user-configurable per-channel event maximum.
+pub const MIN_EVENTS_PER_CHANNEL_SETTING: usize = 1_000;
+
+/// Upper bound for the user-configurable per-channel event maximum.
+pub const MAX_EVENTS_PER_CHANNEL_SETTING: usize = 10_000_000;
+
+/// Clamp a user-supplied per-channel event maximum into the supported range.
+///
+/// Used by both the filter-panel text field and the persisted-settings
+/// restore path so the two can never disagree.
+pub fn clamp_max_events(v: usize) -> usize {
+    v.clamp(
+        MIN_EVENTS_PER_CHANNEL_SETTING,
+        MAX_EVENTS_PER_CHANNEL_SETTING,
+    )
+}

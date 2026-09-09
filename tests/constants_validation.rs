@@ -86,7 +86,7 @@ fn max_events_per_channel_serialises_to_nonempty_string() {
 /// the max-events text field in the filter panel.
 #[test]
 fn max_events_clamping_is_correct() {
-    let clamp = |v: usize| v.clamp(1_000, 10_000_000);
+    use eventsleuth::util::constants::clamp_max_events as clamp;
 
     assert_eq!(clamp(0), 1_000, "0 must clamp to minimum 1000");
     assert_eq!(clamp(500), 1_000, "500 must clamp to minimum 1000");
