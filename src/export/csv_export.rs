@@ -53,6 +53,23 @@ pub fn validate_export_path(path: &Path) -> Result<(), EventSleuthError> {
     }
 }
 
+/// Neutralise spreadsheet formula injection in an exported CSV field.
+///
+/// Event Log content is attacker-influenceable, so any value that would be
+/// interpreted as a formula by Excel / LibreOffice / Sheets is prefixed with
+/// a literal apostrophe, which forces the cell to be treated as text.
+pub fn sanitize_csv_field(value: &str) -> String {
+    match value.chars().next() {
+        Some('=') | Some('+') | Some('-') | Some('@') | Some('\t') | Some('\r') => {
+            let mut out = String::with_capacity(value.len() + 1);
+            out.push('\'');
+            out.push_str(value);
+            out
+        }
+        _ => value.to_owned(),
+    }
+}
+
 /// Export the given events to a CSV file at `path`.
 ///
 /// Columns: Timestamp, Level, EventID, Provider, Computer, Channel, Message.
@@ -85,13 +102,13 @@ pub fn export_csv(events: &[EventRecord], path: &Path) -> Result<(), EventSleuth
     for event in events {
         writer
             .write_record([
-                &format_table_timestamp(&event.timestamp),
-                &event.level_name,
-                &event.event_id.to_string(),
-                &event.provider_name,
-                &event.computer,
-                &event.channel,
-                event.display_message(),
+                format_table_timestamp(&event.timestamp),
+                event.level_name.clone(),
+                event.event_id.to_string(),
+                sanitize_csv_field(&event.provider_name),
+                sanitize_csv_field(&event.computer),
+                sanitize_csv_field(&event.channel),
+                sanitize_csv_field(event.display_message()),
             ])
             .map_err(|e| EventSleuthError::Export(format!("Failed to write CSV row: {e}")))?;
     }
