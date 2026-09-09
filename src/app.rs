@@ -169,6 +169,8 @@ pub struct EventSleuthApp {
     pub show_save_preset: bool,
     /// Text input for the new preset name.
     pub preset_name_input: String,
+    /// Index of the preset whose delete is armed and awaiting confirmation.
+    pub preset_delete_confirm: Option<usize>,
 
     // ── Live tail ───────────────────────────────────────────────
     /// When `true`, the app periodically re-queries for new events.
@@ -314,6 +316,7 @@ impl EventSleuthApp {
             filter_presets: Vec::new(),
             show_save_preset: false,
             preset_name_input: String::new(),
+            preset_delete_confirm: None,
 
             live_tail: false,
             last_tail_time: None,

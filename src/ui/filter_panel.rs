@@ -9,6 +9,16 @@
 use crate::app::EventSleuthApp;
 use crate::ui::theme;
 
+/// Whether the confirmation controls (rather than the trash icon) are shown
+/// for preset `i`.
+///
+/// Deleting a saved preset is irreversible and persisted, so it takes two
+/// deliberate clicks: the trash icon only arms this state, and only the preset
+/// that is armed can be deleted.
+pub(crate) fn delete_confirm_shown(armed: Option<usize>, i: usize) -> bool {
+    armed == Some(i)
+}
+
 impl EventSleuthApp {
     /// Render the filter panel within the given `Ui` region.
     ///
@@ -74,27 +84,53 @@ impl EventSleuthApp {
                 } else {
                     let mut load_idx: Option<usize> = None;
                     let mut delete_idx: Option<usize> = None;
+                    let mut arm_idx: Option<usize> = None;
+                    let mut disarm = false;
+                    let armed = self.preset_delete_confirm;
                     for (i, preset) in self.filter_presets.iter().enumerate() {
                         ui.horizontal(|ui| {
                             if ui.button(&preset.name).clicked() {
                                 load_idx = Some(i);
                             }
-                            if ui
+                            if delete_confirm_shown(armed, i) {
+                                if ui
+                                    .small_button("\u{2714} Delete?")
+                                    .on_hover_text("Permanently delete this preset")
+                                    .clicked()
+                                {
+                                    delete_idx = Some(i);
+                                }
+                                if ui
+                                    .small_button("\u{2716}")
+                                    .on_hover_text("Keep this preset")
+                                    .clicked()
+                                {
+                                    disarm = true;
+                                }
+                            } else if ui
                                 .small_button("\u{1F5D1}")
-                                .on_hover_text("Delete this preset")
+                                .on_hover_text("Delete this preset (asks for confirmation)")
                                 .clicked()
                             {
-                                delete_idx = Some(i);
+                                arm_idx = Some(i);
                             }
                         });
+                    }
+                    if let Some(i) = arm_idx {
+                        self.preset_delete_confirm = Some(i);
+                    }
+                    if disarm {
+                        self.preset_delete_confirm = None;
                     }
                     if let Some(idx) = load_idx {
                         self.filter = self.filter_presets[idx].to_filter_state();
                         self.needs_refilter = true;
+                        self.preset_delete_confirm = None;
                         ui.close_menu();
                     }
                     if let Some(idx) = delete_idx {
                         self.filter_presets.remove(idx);
+                        self.preset_delete_confirm = None;
                     }
                 }
                 ui.separator();
@@ -480,5 +516,26 @@ impl EventSleuthApp {
         if text_changed {
             self.debounce_timer = Some(std::time::Instant::now());
         }
+    }
+}
+
+#[cfg(test)]
+mod preset_delete_tests {
+    use super::delete_confirm_shown;
+
+    /// Regression test: with nothing armed, no preset offers a delete action —
+    /// a single click on the trash icon can never remove a preset.
+    #[test]
+    fn nothing_armed_means_no_delete_control() {
+        assert!(!delete_confirm_shown(None, 0));
+        assert!(!delete_confirm_shown(None, 3));
+    }
+
+    /// Arming one preset must not offer to delete a different one.
+    #[test]
+    fn only_the_armed_preset_can_be_deleted() {
+        assert!(delete_confirm_shown(Some(2), 2));
+        assert!(!delete_confirm_shown(Some(2), 1));
+        assert!(!delete_confirm_shown(Some(2), 3));
     }
 }
