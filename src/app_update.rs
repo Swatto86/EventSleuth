@@ -27,6 +27,7 @@ impl EventSleuthApp {
         // tail completion in `process_messages` (fixes incorrect status
         // text when the user refreshes while live-tail is running).
         self.is_tail_query = false;
+        self.tail_cutoff = None;
 
         if self.selected_channels.is_empty() {
             self.status_text = "No sources selected".into();
@@ -120,7 +121,14 @@ impl EventSleuthApp {
             match rx.try_recv() {
                 Ok(msg) => match msg {
                     ReaderMessage::EventBatch(batch) => {
-                        self.all_events.extend(batch);
+                        // Tail queries over-fetch by up to one millisecond (see
+                        // start_tail_query); drop anything we already hold.
+                        match (self.is_tail_query, self.tail_cutoff) {
+                            (true, Some(cutoff)) => self
+                                .all_events
+                                .extend(batch.into_iter().filter(|e| e.timestamp > cutoff)),
+                            _ => self.all_events.extend(batch),
+                        }
 
                         // Guard against unbounded memory growth during live-tail.
                         //
@@ -191,6 +199,7 @@ impl EventSleuthApp {
                                 tracing::info!("Tail complete: {} new events", total);
                             }
                             self.is_tail_query = false;
+                            self.tail_cutoff = None;
                         } else {
                             self.query_elapsed = Some(elapsed);
                             self.status_text = format!("Loaded {} events", total);

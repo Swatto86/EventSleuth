@@ -172,6 +172,11 @@ pub struct EventSleuthApp {
     pub last_tail_time: Option<std::time::Instant>,
     /// Whether the current in-flight query is a tail append (vs full load).
     pub is_tail_query: bool,
+    /// Timestamp of the newest loaded event at the moment the current
+    /// live-tail poll was started. The tail query deliberately over-fetches
+    /// (its XPath bound only carries millisecond precision), so events at or
+    /// before this instant are discarded when the batch arrives.
+    pub tail_cutoff: Option<chrono::DateTime<chrono::Utc>>,
 
     // ── .evtx file import ───────────────────────────────────────
     /// Receiver for a file path selected by the user via the open dialog.
@@ -306,6 +311,7 @@ impl EventSleuthApp {
             live_tail: false,
             last_tail_time: None,
             is_tail_query: false,
+            tail_cutoff: None,
 
             import_rx: None,
 

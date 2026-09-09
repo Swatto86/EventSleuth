@@ -362,33 +362,32 @@ impl EventSleuthApp {
         self.cancel_flag = Some(cancel);
         self.is_loading = true;
         self.is_tail_query = false;
+        self.tail_cutoff = None;
         self.status_text = format!("Loading {}...", display_name);
     }
 }
 
 // ── Live-tail timestamp helper (pure, testable) ─────────────────────────
 
-/// Advance the newest loaded event timestamp by 1 ms to form the lower bound
-/// of the next tail query.
+/// Lower bound for the next tail query: the start of the millisecond that
+/// contains the newest loaded event.
 ///
-/// Returns `None` when there is no newest timestamp, and also when the add
-/// overflows at `DateTime<Utc>::MAX_UTC` — in that case the tail poll is
-/// skipped rather than silently re-delivering the last event on every tick.
+/// The bound must never advance past `newest`.  `build_xpath_query` renders
+/// the bound with millisecond precision while Windows event timestamps carry
+/// 100 ns resolution, so advancing (the old `newest + 1 ms`) skipped every
+/// event logged in the remainder of that millisecond.  Truncating downwards
+/// makes the query deliberately over-fetch instead; the already-seen events
+/// are discarded on arrival in `process_messages` using `tail_cutoff`.
+///
+/// Returns `None` when there is no newest timestamp, in which case the tail
+/// poll falls back to `filter.time_from`.
 pub(crate) fn next_tail_from(
     newest: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
-    newest.and_then(
-        |t| match t.checked_add_signed(chrono::Duration::milliseconds(1)) {
-            Some(advanced) => Some(advanced),
-            None => {
-                tracing::warn!(
-                    "start_tail_query: newest timestamp is at DateTime::MAX, \
-                     skipping tail poll to avoid re-delivering last event"
-                );
-                None // None causes spawn_reader_thread to use filter.time_from
-            }
-        },
-    )
+    newest.map(|t| {
+        let sub_ms = (t.timestamp_subsec_nanos() % 1_000_000) as i64;
+        t - chrono::Duration::nanoseconds(sub_ms)
+    })
 }
 
 // ── Live tail ───────────────────────────────────────────────────────────
@@ -396,7 +395,8 @@ pub(crate) fn next_tail_from(
 impl EventSleuthApp {
     /// Start a tail query that appends new events (does NOT clear existing data).
     ///
-    /// Queries from 1ms after the newest loaded event timestamp forward.
+    /// Queries from the start of the millisecond containing the newest loaded
+    /// event, discarding the resulting duplicates on arrival.
     pub fn start_tail_query(&mut self) {
         if self.is_loading || self.selected_channels.is_empty() {
             return;
@@ -404,11 +404,14 @@ impl EventSleuthApp {
 
         // Find the newest timestamp in the current data.
         let newest = self.all_events.iter().map(|e| e.timestamp).max();
-        // Use checked arithmetic to guard against overflow at DateTime<Utc>::MAX.
-        // If the add overflows, log a warning and skip the tail poll rather than
-        // silently re-delivering the last event on every tick (which happened
-        // with the old `unwrap_or(t)` fallback — Bug fix: infinite re-delivery).
+        // Query from the millisecond boundary at or below `newest`, NOT from
+        // `newest + 1ms`: the XPath literal built by `build_xpath_query` is
+        // truncated to milliseconds, so advancing past `newest` would silently
+        // skip every event in the remainder of that millisecond.  Over-fetching
+        // is safe because `process_messages` drops anything at or before
+        // `tail_cutoff`.
         let tail_from = next_tail_from(newest);
+        self.tail_cutoff = newest;
 
         let (tx, rx) = crossbeam_channel::bounded(constants::CHANNEL_BOUND);
         let cancel = Arc::new(AtomicBool::new(false));
@@ -520,19 +523,29 @@ impl EventSleuthApp {
 #[cfg(test)]
 mod tail_datetime_tests {
     use super::next_tail_from;
-    use chrono::{Duration, TimeZone, Utc};
+    use chrono::{TimeZone, Timelike, Utc};
 
-    /// Regression test for B2: at `DateTime<Utc>::MAX_UTC` the helper must
-    /// return `None` so the tail poll is skipped, rather than falling back to
-    /// the un-incremented timestamp (the old `.unwrap_or(t)` behaviour, which
-    /// re-delivered the last event on every live-tail tick).
+    /// Regression test for the sub-millisecond gap: the tail lower bound must
+    /// be truncated DOWN to the millisecond that contains the newest event, so
+    /// no event logged in the remainder of that millisecond is skipped by the
+    /// millisecond-precision XPath literal.
     #[test]
-    fn tail_from_near_max_datetime_overflow_returns_none() {
-        let max_dt = chrono::DateTime::<Utc>::MAX_UTC;
-        assert!(
-            next_tail_from(Some(max_dt)).is_none(),
-            "at DateTime::MAX the tail lower bound must be None, not the original timestamp"
-        );
+    fn tail_from_truncates_down_to_containing_millisecond() {
+        let newest = Utc
+            .with_ymd_and_hms(2024, 6, 15, 12, 0, 0)
+            .unwrap()
+            .with_nanosecond(123_456_700)
+            .unwrap();
+        let tail_from = next_tail_from(Some(newest)).expect("a newest timestamp yields a bound");
+        assert!(tail_from <= newest, "bound must never advance past newest");
+        assert_eq!(tail_from.timestamp_subsec_nanos(), 123_000_000);
+    }
+
+    /// A timestamp already on a millisecond boundary is used unchanged.
+    #[test]
+    fn tail_from_on_millisecond_boundary_is_unchanged() {
+        let ts = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
+        assert_eq!(next_tail_from(Some(ts)), Some(ts));
     }
 
     /// No loaded events means no tail lower bound.
@@ -541,11 +554,13 @@ mod tail_datetime_tests {
         assert!(next_tail_from(None).is_none());
     }
 
-    /// Normal case: the helper advances a typical timestamp by exactly 1 ms.
+    /// At `DateTime<Utc>::MAX_UTC` the bound must still be computable and must
+    /// not advance past the newest event (the old `+ 1 ms` arithmetic
+    /// overflowed here); duplicates are dropped against `tail_cutoff`.
     #[test]
-    fn tail_from_normal_datetime_increments_by_1ms() {
-        let ts = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
-        let advanced = next_tail_from(Some(ts)).expect("normal timestamp must advance");
-        assert_eq!(advanced - ts, Duration::milliseconds(1));
+    fn tail_from_at_max_datetime_does_not_advance() {
+        let max_dt = chrono::DateTime::<Utc>::MAX_UTC;
+        let bound = next_tail_from(Some(max_dt)).expect("bound must be computable at MAX");
+        assert!(bound <= max_dt, "bound must never advance past newest");
     }
 }
